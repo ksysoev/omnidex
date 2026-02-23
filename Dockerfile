@@ -9,9 +9,21 @@ RUN go mod download
 
 RUN CGO_ENABLED=0 go build -o omnidex -ldflags "-X main.version=$VERSION -X main.name=omnidex" ./cmd/omnidex/main.go
 
-FROM scratch
+FROM alpine:3.21
 
-COPY --from=builder /app/omnidex .
+# Create non-root user.
+RUN addgroup -S omnidex && adduser -S omnidex -G omnidex
+
+# Create data directories.
+RUN mkdir -p /data/docs /data/search && chown -R omnidex:omnidex /data
+
+COPY --from=builder /app/omnidex /usr/local/bin/omnidex
+COPY --from=builder /app/static /static
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-ENTRYPOINT ["/omnidex"]
+USER omnidex
+
+EXPOSE 8080
+
+ENTRYPOINT ["omnidex"]
+CMD ["serve"]

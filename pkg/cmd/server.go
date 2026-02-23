@@ -6,9 +6,10 @@ import (
 
 	"github.com/ksysoev/omnidex/pkg/api"
 	"github.com/ksysoev/omnidex/pkg/core"
-	"github.com/ksysoev/omnidex/pkg/prov/someapi"
-	"github.com/ksysoev/omnidex/pkg/repo/user"
-	"github.com/redis/go-redis/v9"
+	"github.com/ksysoev/omnidex/pkg/prov/markdown"
+	"github.com/ksysoev/omnidex/pkg/repo/docstore"
+	"github.com/ksysoev/omnidex/pkg/repo/search"
+	"github.com/ksysoev/omnidex/pkg/views"
 )
 
 // RunCommand initializes the logger, loads configuration, creates the core and API services,
@@ -23,16 +24,31 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.Addr,
-		Password: cfg.Redis.Password,
-	})
+	// Initialize document storage.
+	store, err := docstore.New(cfg.Storage.Path)
+	if err != nil {
+		return fmt.Errorf("failed to create document store: %w", err)
+	}
 
-	someAPI := someapi.New(cfg.Provider.SomeAPI)
-	userRepo := user.New(rdb)
-	svc := core.New(userRepo, someAPI)
+	// Initialize search engine.
+	searchEngine, err := search.NewBleve(cfg.Search.IndexPath)
+	if err != nil {
+		return fmt.Errorf("failed to create search engine: %w", err)
+	}
 
-	apiSvc, err := api.New(cfg.API, svc)
+	defer searchEngine.Close()
+
+	// Initialize markdown renderer.
+	renderer := markdown.New()
+
+	// Initialize core service.
+	svc := core.New(store, searchEngine, renderer)
+
+	// Initialize view renderer.
+	viewRenderer := views.New()
+
+	// Initialize and run API server.
+	apiSvc, err := api.New(cfg.API, svc, viewRenderer)
 	if err != nil {
 		return fmt.Errorf("failed to create API service: %w", err)
 	}

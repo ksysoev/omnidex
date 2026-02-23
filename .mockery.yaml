@@ -11,10 +11,9 @@ packages:
   github.com/ksysoev/omnidex/pkg/api:
     interfaces:
       Service:
+      ViewRenderer:
   github.com/ksysoev/omnidex/pkg/core:
     interfaces:
-      userRepo:
-      someAPIProv:
-  github.com/ksysoev/omnidex/pkg/repo/user:
-    interfaces:
-      userDAO: 
+      docStore:
+      searchEngine:
+      markdownRenderer:
