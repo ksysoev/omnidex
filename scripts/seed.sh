@@ -10,6 +10,11 @@ DOCS_PATH="${DOCS_PATH:-docs/sample}"
 REPO_NAME="${REPO_NAME:-omnidex/omnidex}"
 COMMIT_SHA="${COMMIT_SHA:-local}"
 
+if [ ! -d "${DOCS_PATH}" ]; then
+	echo "Error: docs directory '${DOCS_PATH}' does not exist"
+	exit 1
+fi
+
 API_URL="${OMNIDEX_URL%/}/api/v1/docs"
 
 echo "Seeding docs from '${DOCS_PATH}' to ${OMNIDEX_URL}"

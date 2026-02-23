@@ -17,14 +17,8 @@ The fastest way to get Omnidex running locally:
 git clone https://github.com/ksysoev/omnidex.git
 cd omnidex
 
-# Copy the example environment file
-cp .env.example .env
-
-# Start Omnidex
+# Start Omnidex (automatically seeds sample documentation)
 make up
-
-# (Optional) Seed with sample documentation
-make seed
 ```
 
 After startup, visit [http://localhost:8080](http://localhost:8080) to access the portal.

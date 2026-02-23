@@ -24,7 +24,7 @@ Returns `200 OK` if the server is running. No authentication required.
 
 **Response:**
 ```
-ok
+Ok
 ```
 
 ### Ingest Documents
@@ -68,8 +68,8 @@ Batch upsert or delete documents for a repository.
 **Response (200 OK):**
 ```json
 {
-  "processed": 2,
-  "errors": []
+  "indexed": 2,
+  "deleted": 0
 }
 ```
 
@@ -83,13 +83,15 @@ Returns a list of all indexed repositories with document counts.
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "name": "owner/repo-name",
-    "doc_count": 15,
-    "last_updated": "2025-01-15T10:30:00Z"
-  }
-]
+{
+  "repos": [
+    {
+      "name": "owner/repo-name",
+      "doc_count": 15,
+      "last_updated": "2025-01-15T10:30:00Z"
+    }
+  ]
+}
 ```
 
 ## Portal Routes
