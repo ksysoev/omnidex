@@ -18,7 +18,7 @@ type appConfig struct {
 
 type RedisConfig struct {
 	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password"`
+	Password string `mapstructure:"password" json:"-"`
 }
 
 type Provider struct {
