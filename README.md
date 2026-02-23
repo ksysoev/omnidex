@@ -12,7 +12,7 @@ Centralized documentation portal for your repos
 ## Building from Source
 
 ```sh
-RUN CGO_ENABLED=0 go build -o omnidex -ldflags "-X main.version=dev -X main.name=omnidex" ./cmd/omnidex/main.go
+CGO_ENABLED=0 go build -o omnidex -ldflags "-X main.version=dev -X main.name=omnidex" ./cmd/omnidex/main.go
 ```
 
 ### Using Go
