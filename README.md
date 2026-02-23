@@ -54,7 +54,7 @@ Omnidex is configured via a YAML file and/or environment variables. Environment 
 | — | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | — | `LOG_TEXT` | `true` | Use text format for logs (`true`) or JSON (`false`) |
 
-See [`.env.example`](.env.example) for a quick reference of all available variables. The `docker-compose.yml` includes reasonable defaults so no `.env` file is required for local development.
+See [`.env.example`](.env.example) for a quick reference of all available variables. The `docker-compose.yml` includes reasonable defaults so no `.env` file is required for local development. Note that Docker Compose uses different default paths (`/data/docs` and `/data/search`) than the local runtime config shown above.
 
 ## Development
 
