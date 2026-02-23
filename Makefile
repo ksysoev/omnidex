@@ -43,5 +43,5 @@ down: ## Stop and clean up containers and volumes
 build-docker: ## Build the Docker image locally
 	docker build -t omnidex:local .
 
-seed: ## Publish sample docs to the running local instance
-	docker compose --profile seed up omnidex-seed
+seed: ## Re-publish sample docs to the running local instance
+	docker compose up omnidex-seed

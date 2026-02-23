@@ -23,14 +23,11 @@ The fastest way to get Omnidex running locally is with Docker Compose:
 git clone https://github.com/ksysoev/omnidex.git
 cd omnidex
 
-# Start Omnidex
+# Start Omnidex (automatically seeds sample documentation)
 make up
-
-# (Optional) Seed with sample documentation
-make seed
 ```
 
-After startup, visit [http://localhost:8080](http://localhost:8080) to access the portal.
+After startup, sample documentation is automatically published and the portal is ready at [http://localhost:8080](http://localhost:8080). To re-seed the sample docs (e.g., after editing them), run `make seed`.
 
 To stop the environment:
 
