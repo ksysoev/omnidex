@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -23,7 +23,7 @@ jobs:
       - name: Display Go version
         run: go version
       - name: Code Lint
-        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20
       - name: Build
         run: go build -v ./...
       - name: Test
@@ -33,6 +33,6 @@ jobs:
           cat coverage.out | grep -v "_mock.go" > coverage.final.out
           mv coverage.final.out coverage.out
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
         env:
           CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
