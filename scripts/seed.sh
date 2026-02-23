@@ -29,7 +29,7 @@ while IFS= read -r -d '' file; do
 		'. += [{"path": $path, "content": $content, "action": "upsert"}]')
 
 	FILE_COUNT=$((FILE_COUNT + 1))
-done < <(find "${DOCS_PATH}" -name "*.md" -type f -print0 | sort -z)
+done < <(cd "${DOCS_PATH}" && find . -name "*.md" -type f -print0 | sort -z)
 
 if [ "$FILE_COUNT" -eq 0 ]; then
 	echo "Error: No markdown files found in '${DOCS_PATH}'"

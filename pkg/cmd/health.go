@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -36,14 +37,14 @@ func runHealthCheck(ctx context.Context, baseURL string) error {
 	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
 	defer cancel()
 
-	endpoint := baseURL + "/livez"
+	endpoint := strings.TrimRight(baseURL, "/") + "/livez"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is user-provided via CLI flag, not tainted input
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // Accept SSRF risk: URL is intentionally user-provided via CLI for this local health-check utility
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}

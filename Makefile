@@ -44,4 +44,4 @@ build-docker: ## Build the Docker image locally
 	docker build -t omnidex:local .
 
 seed: ## Re-publish sample docs to the running local instance
-	docker compose up omnidex-seed
+	docker compose run --rm omnidex-seed
