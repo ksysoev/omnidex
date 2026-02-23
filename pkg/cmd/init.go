@@ -29,8 +29,8 @@ func InitCommand(build BuildInfo) cobra.Command {
 
 	cmd := cobra.Command{
 		Use:   flags.appName,
-		Short: "",
-		Long:  "",
+		Short: "Centralized documentation portal for your repos",
+		Long:  "Omnidex is a centralized documentation portal that aggregates and serves documentation from your repositories.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return RunCommand(cmd.Context(), &flags)
 		},
