@@ -13,8 +13,8 @@ func TestInitCommand(t *testing.T) {
 	})
 
 	assert.Equal(t, "app", cmd.Use)
-	assert.Contains(t, cmd.Short, "")
-	assert.Contains(t, cmd.Long, "")
+	assert.NotEmpty(t, cmd.Short)
+	assert.NotEmpty(t, cmd.Long)
 
 	require.Len(t, cmd.Commands(), 0)
 
