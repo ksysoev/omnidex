@@ -126,6 +126,82 @@ func TestBleveEngine_SearchEmpty(t *testing.T) {
 	assert.Empty(t, results.Hits)
 }
 
+func TestBleveEngine_SearchDefaultLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	doc := core.Document{
+		ID:        "owner/repo/default-limit.md",
+		Repo:      "owner/repo",
+		Path:      "default-limit.md",
+		Title:     "Default Limit Doc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = engine.Index(t.Context(), doc, "Default limit content for testing")
+	require.NoError(t, err)
+
+	// Search with Limit=0 to trigger the default limit branch (opts.Limit <= 0).
+	results, err := engine.Search(t.Context(), "default limit", core.SearchOpts{Limit: 0})
+	require.NoError(t, err)
+	assert.NotNil(t, results)
+	assert.Greater(t, results.Total, uint64(0))
+}
+
+func TestBleveEngine_SearchFieldExtraction(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	doc := core.Document{
+		ID:        "myowner/myrepo/mypath.md",
+		Repo:      "myowner/myrepo",
+		Path:      "mypath.md",
+		Title:     "Field Extraction Test",
+		UpdatedAt: time.Now(),
+	}
+
+	err = engine.Index(t.Context(), doc, "Field extraction test content")
+	require.NoError(t, err)
+
+	results, err := engine.Search(t.Context(), "field extraction", core.SearchOpts{Limit: 10})
+	require.NoError(t, err)
+	require.NotEmpty(t, results.Hits)
+
+	hit := results.Hits[0]
+	assert.Equal(t, "myowner/myrepo/mypath.md", hit.ID)
+	assert.Equal(t, "myowner/myrepo", hit.Repo)
+	assert.Equal(t, "mypath.md", hit.Path)
+	assert.Equal(t, "Field Extraction Test", hit.Title)
+}
+
+func TestBleveEngine_CloseExplicit(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	err = engine.Close()
+	require.NoError(t, err)
+
+	// Verify we can reopen after explicit close.
+	engine2, err := NewBleve(indexPath)
+	require.NoError(t, err)
+	assert.NotNil(t, engine2)
+
+	engine2.Close()
+}
+
 func TestBleveEngine_ReopenIndex(t *testing.T) {
 	tmpDir := t.TempDir()
 	indexPath := filepath.Join(tmpDir, "test.bleve")

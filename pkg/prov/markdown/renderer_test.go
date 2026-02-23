@@ -171,3 +171,54 @@ func TestRenderer_ToPlainText(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderer_ToPlainText_MultipleBlocks(t *testing.T) {
+	r := New()
+
+	input := "# Title\n\nFirst paragraph.\n\n## Subtitle\n\nSecond paragraph with **bold** and *italic*.\n\n- Item one\n- Item two\n\n```go\nfmt.Println(\"hello\")\n```"
+
+	result := r.ToPlainText([]byte(input))
+
+	assert.Contains(t, result, "Title")
+	assert.Contains(t, result, "First paragraph.")
+	assert.Contains(t, result, "Subtitle")
+	assert.Contains(t, result, "Second paragraph with bold and italic.")
+	assert.Contains(t, result, "Item one")
+	assert.Contains(t, result, "Item two")
+	assert.Contains(t, result, "fmt.Println")
+	assert.NotContains(t, result, "**")
+	assert.NotContains(t, result, "```")
+}
+
+func TestRenderer_ExtractTitle_FormattedH1(t *testing.T) {
+	r := New()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "H1 with bold extracts empty (only plain text nodes)",
+			input: "# **Bold Title**\n\nContent.",
+			want:  "",
+		},
+		{
+			name:  "multiple H1 returns first",
+			input: "# First Title\n\n# Second Title",
+			want:  "First Title",
+		},
+		{
+			name:  "H1 with only whitespace",
+			input: "#   Spaced Title  \n\nContent.",
+			want:  "Spaced Title",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := r.ExtractTitle([]byte(tt.input))
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}

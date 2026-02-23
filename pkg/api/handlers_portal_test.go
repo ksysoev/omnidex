@@ -236,3 +236,98 @@ func TestSearchPage_SearchError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Search failed")
 }
+
+func TestDocPage_ServiceInternalError(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").
+		Return(core.Document{}, nil, fmt.Errorf("database connection lost"))
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/docs/readme.md", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+	req.SetPathValue("path", "docs/readme.md")
+
+	rec := httptest.NewRecorder()
+
+	api.docPage(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Internal Server Error")
+}
+
+func TestDocPage_ListDocumentsError(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	doc := core.Document{
+		ID:        "owner/repo/docs/readme.md",
+		Repo:      "owner/repo",
+		Path:      "docs/readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc123",
+		UpdatedAt: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+	}
+	htmlContent := []byte("<h1>README</h1>")
+
+	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, nil)
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(nil, fmt.Errorf("nav list error"))
+	// When ListDocuments fails, docs will be nil but page still renders.
+	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, []core.DocumentMeta(nil), false).Return(nil)
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/docs/readme.md", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+	req.SetPathValue("path", "docs/readme.md")
+
+	rec := httptest.NewRecorder()
+
+	api.docPage(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
+func TestDocPage_HTMXPartial(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	doc := core.Document{
+		ID:        "owner/repo/docs/readme.md",
+		Repo:      "owner/repo",
+		Path:      "docs/readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc123",
+		UpdatedAt: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+	}
+	htmlContent := []byte("<h1>README</h1>")
+	navDocs := []core.DocumentMeta{
+		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README"},
+	}
+
+	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, nil)
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(navDocs, nil)
+	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, navDocs, true).Return(nil)
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/docs/readme.md", http.NoBody)
+	req.Header.Set("HX-Request", "true")
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+	req.SetPathValue("path", "docs/readme.md")
+
+	rec := httptest.NewRecorder()
+
+	api.docPage(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}

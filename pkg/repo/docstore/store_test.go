@@ -2,6 +2,8 @@ package docstore
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -344,4 +346,176 @@ func TestStore_ListMultipleRepos(t *testing.T) {
 	repos, err := store.ListRepos(t.Context())
 	require.NoError(t, err)
 	assert.Len(t, repos, 2)
+}
+
+func TestStore_GetCorruptedMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	doc := core.Document{
+		ID:        "owner/repo/doc.md",
+		Repo:      "owner/repo",
+		Path:      "doc.md",
+		Title:     "Test",
+		Content:   "# Test",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	require.NoError(t, err)
+
+	// Corrupt the metadata file.
+	metaPath := filepath.Join(tmpDir, "owner", "repo", "docs", "doc.md.meta.json")
+	err = os.WriteFile(metaPath, []byte("{invalid json"), 0o600)
+	require.NoError(t, err)
+
+	_, err = store.Get(t.Context(), "owner/repo", "doc.md")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal")
+}
+
+func TestStore_ListWithMissingMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a doc file without metadata by writing directly to disk.
+	docDir := filepath.Join(tmpDir, "owner", "repo", "docs")
+	err = os.MkdirAll(docDir, 0o750)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(docDir, "bare.md"), []byte("# Bare"), 0o600)
+	require.NoError(t, err)
+
+	list, err := store.List(t.Context(), "owner/repo")
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+	assert.Equal(t, "bare.md", list[0].Path)
+	// Title falls back to the relative path when metadata is missing.
+	assert.Equal(t, "bare.md", list[0].Title)
+}
+
+func TestStore_ListReposSkipsNonDirEntries(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Save a real document to have a valid repo.
+	doc := core.Document{
+		ID:        "owner/repo/readme.md",
+		Repo:      "owner/repo",
+		Path:      "readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	require.NoError(t, err)
+
+	// Create a file (not directory) in basePath to test non-dir skip.
+	err = os.WriteFile(filepath.Join(tmpDir, "stray-file.txt"), []byte("noise"), 0o600)
+	require.NoError(t, err)
+
+	// Create a file inside the owner directory to test non-dir repo skip.
+	err = os.WriteFile(filepath.Join(tmpDir, "owner", "stray-file.txt"), []byte("noise"), 0o600)
+	require.NoError(t, err)
+
+	repos, err := store.ListRepos(t.Context())
+	require.NoError(t, err)
+	assert.Len(t, repos, 1)
+	assert.Equal(t, "owner/repo", repos[0].Name)
+}
+
+func TestStore_ListReposSkipsMissingMeta(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a repo directory structure without meta.json.
+	repoDir := filepath.Join(tmpDir, "owner", "repo-no-meta", "docs")
+	err = os.MkdirAll(repoDir, 0o750)
+	require.NoError(t, err)
+
+	repos, err := store.ListRepos(t.Context())
+	require.NoError(t, err)
+	// Repo without meta.json should be skipped.
+	assert.Empty(t, repos)
+}
+
+func TestStore_ReadRepoMetaCorruptJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a repo directory with corrupted meta.json.
+	repoDir := filepath.Join(tmpDir, "owner", "repo-bad")
+	err = os.MkdirAll(repoDir, 0o750)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(repoDir, "meta.json"), []byte("{corrupt json"), 0o600)
+	require.NoError(t, err)
+
+	// ListRepos should skip this repo (readRepoMeta fails, continue).
+	repos, err := store.ListRepos(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, repos)
+}
+
+func TestStore_DeleteNonexistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// First save a doc to ensure repo dir exists.
+	doc := core.Document{
+		ID:        "owner/repo/exists.md",
+		Repo:      "owner/repo",
+		Path:      "exists.md",
+		Title:     "Exists",
+		Content:   "# Exists",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	require.NoError(t, err)
+
+	// Delete a doc that doesn't exist - should not error.
+	err = store.Delete(t.Context(), "owner/repo", "does-not-exist.md")
+	assert.NoError(t, err)
+}
+
+func TestStore_CleanEmptyDirsWithRemainingFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Save two docs in the same directory.
+	for _, name := range []string{"a.md", "b.md"} {
+		doc := core.Document{
+			ID:        "owner/repo/subdir/" + name,
+			Repo:      "owner/repo",
+			Path:      "subdir/" + name,
+			Title:     name,
+			Content:   "# " + name,
+			CommitSHA: "abc",
+			UpdatedAt: time.Now(),
+		}
+
+		err = store.Save(t.Context(), doc)
+		require.NoError(t, err)
+	}
+
+	// Delete one doc - directory should NOT be cleaned up because b.md still exists.
+	err = store.Delete(t.Context(), "owner/repo", "subdir/a.md")
+	require.NoError(t, err)
+
+	// b.md should still be accessible.
+	got, err := store.Get(t.Context(), "owner/repo", "subdir/b.md")
+	require.NoError(t, err)
+	assert.Equal(t, "b.md", got.Title)
 }
