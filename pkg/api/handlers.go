@@ -21,7 +21,6 @@ func (a *API) healthCheck(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := w.Write([]byte("Ok")); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to write response", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 
 		return
 	}
