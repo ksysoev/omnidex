@@ -26,4 +26,4 @@ USER omnidex
 EXPOSE 8080
 
 ENTRYPOINT ["omnidex"]
-CMD ["serve"]
+CMD ["serve", "--config", ""]

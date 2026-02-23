@@ -23,9 +23,6 @@ The fastest way to get Omnidex running locally is with Docker Compose:
 git clone https://github.com/ksysoev/omnidex.git
 cd omnidex
 
-# Copy the example environment file
-cp .env.example .env
-
 # Start Omnidex
 make up
 
@@ -41,6 +38,12 @@ To stop the environment:
 make down
 ```
 
+All configuration has sensible defaults baked into `docker-compose.yml`. To override any value, export the corresponding environment variable before running `make up`:
+
+```bash
+API_API_KEYS=my-secret-key make up
+```
+
 ## Configuration
 
 Omnidex is configured via a YAML file and/or environment variables. Environment variables take precedence over the config file.
@@ -54,7 +57,7 @@ Omnidex is configured via a YAML file and/or environment variables. Environment 
 | — | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | — | `LOG_TEXT` | `true` | Use text format for logs (`true`) or JSON (`false`) |
 
-See [`.env.example`](.env.example) for a complete example.
+See [`.env.example`](.env.example) for a quick reference of all available variables. The `docker-compose.yml` includes reasonable defaults so no `.env` file is required for local development.
 
 ## Development
 
