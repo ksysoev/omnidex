@@ -1,0 +1,20 @@
+disable-version-string: true
+resolve-type-alias: false
+with-expecter: true
+mock-build-tags: "!compile"
+inpackage: true
+issue-845-fix: true
+filename: "{{.InterfaceName | snakecase }}_mock.go"
+dir: "{{.InterfaceDir}}"
+mockname: "Mock{{.InterfaceName}}"
+packages:
+  github.com/ksysoev/omnidex/pkg/api:
+    interfaces:
+      Service:
+  github.com/ksysoev/omnidex/pkg/core:
+    interfaces:
+      userRepo:
+      someAPIProv:
+  github.com/ksysoev/omnidex/pkg/repo/user:
+    interfaces:
+      userDAO: 
