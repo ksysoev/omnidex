@@ -36,4 +36,6 @@ USER omnidex
 EXPOSE 8080
 
 ENTRYPOINT ["omnidex"]
+# Empty --config disables config file loading; the container is configured
+# entirely via environment variables (see .env.example).
 CMD ["serve", "--config", ""]

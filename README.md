@@ -134,6 +134,9 @@ Add the Omnidex publish action to your repository's CI workflow:
 
 This will publish all markdown files from the `docs` directory on every push.
 
+> **Tip:** For production workflows, pin the action to a specific version tag
+> (e.g. `@v1`) or commit SHA instead of `@main` to avoid unexpected changes.
+
 ## Testing
 
 ```bash
