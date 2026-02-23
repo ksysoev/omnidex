@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ksysoev/omnidex/pkg/api"
-	"github.com/ksysoev/omnidex/pkg/prov/someapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,12 +14,12 @@ func TestLoadConfig(t *testing.T) {
 	const validConfig = `
 api:
   listen: ":8082"
-redis:
-  addr: "localhost:6379"
-  password: "testpassword"
-provider:
-  some_api:
-    base_url: "https://api.example.com"
+  api_keys:
+    - testkey123
+storage:
+  path: "./data/repos"
+search:
+  index_path: "./data/search.bleve"
 `
 
 	tests := []struct {
@@ -37,16 +36,14 @@ provider:
 			configData:  validConfig,
 			expectConfig: &appConfig{
 				API: api.Config{
-					Listen: ":8082",
+					Listen:  ":8082",
+					APIKeys: []string{"testkey123"},
 				},
-				Redis: RedisConfig{
-					Addr:     "localhost:6379",
-					Password: "testpassword",
+				Storage: StorageConfig{
+					Path: "./data/repos",
 				},
-				Provider: Provider{
-					SomeAPI: someapi.Config{
-						BaseURL: "https://api.example.com",
-					},
+				Search: SearchConfig{
+					IndexPath: "./data/search.bleve",
 				},
 			},
 		},
@@ -64,23 +61,20 @@ provider:
 		{
 			name: "valid config with environment overrides",
 			envVars: map[string]string{
-				"API_LISTEN":                 ":8083",
-				"PROVIDER_SOME_API_BASE_URL": "https://test.com",
+				"API_LISTEN": ":8083",
 			},
 			expectError: false,
 			configData:  validConfig,
 			expectConfig: &appConfig{
 				API: api.Config{
-					Listen: ":8083",
+					Listen:  ":8083",
+					APIKeys: []string{"testkey123"},
 				},
-				Redis: RedisConfig{
-					Addr:     "localhost:6379",
-					Password: "testpassword",
+				Storage: StorageConfig{
+					Path: "./data/repos",
 				},
-				Provider: Provider{
-					SomeAPI: someapi.Config{
-						BaseURL: "https://test.com",
-					},
+				Search: SearchConfig{
+					IndexPath: "./data/search.bleve",
 				},
 			},
 		},

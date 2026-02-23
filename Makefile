@@ -2,7 +2,10 @@
 
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage:\n  make <target>\n\nTargets:\n"} \
-		/^([a-zA-Z_-]+):.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+		/^([a-zA-Z_-]+):.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+build: ## Build the omnidex binary
+	go build -o omnidex ./cmd/omnidex/main.go
 
 test: ## Run unit tests with race detector
 	go test --race ./...
@@ -22,10 +25,11 @@ fmt: ## Format code with gofmt
 fields: ## Fix field alignment
 	fieldalignment -fix ./...
 
+tailwind: ## Build Tailwind CSS (requires tailwindcss CLI)
+	tailwindcss -i static/css/input.css -o static/css/style.css --minify
 
-# Temporary helpers to initialize the project structure
-# Commands below can be removed once project is initialized
-init: init_files tidy fmt mocks
+dev-css: ## Watch and rebuild Tailwind CSS on changes
+	tailwindcss -i static/css/input.css -o static/css/style.css --watch
 
-init_files:
-	@mv ./cmd/app ./cmd/omnidex
+run: build ## Build and run the server
+	./omnidex serve --config runtime/config.yml

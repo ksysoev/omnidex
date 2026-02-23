@@ -7,6 +7,7 @@ package api
 import (
 	context "context"
 
+	core "github.com/ksysoev/omnidex/pkg/core"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -23,48 +24,305 @@ func (_m *MockService) EXPECT() *MockService_Expecter {
 	return &MockService_Expecter{mock: &_m.Mock}
 }
 
-// CheckHealth provides a mock function with given fields: ctx
-func (_m *MockService) CheckHealth(ctx context.Context) error {
-	ret := _m.Called(ctx)
+// GetDocument provides a mock function with given fields: ctx, repo, path
+func (_m *MockService) GetDocument(ctx context.Context, repo string, path string) (core.Document, []byte, error) {
+	ret := _m.Called(ctx, repo, path)
 
 	if len(ret) == 0 {
-		panic("no return value specified for CheckHealth")
+		panic("no return value specified for GetDocument")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context) error); ok {
-		r0 = rf(ctx)
+	var r0 core.Document
+	var r1 []byte
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (core.Document, []byte, error)); ok {
+		return rf(ctx, repo, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) core.Document); ok {
+		r0 = rf(ctx, repo, path)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(core.Document)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) []byte); ok {
+		r1 = rf(ctx, repo, path)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]byte)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(context.Context, string, string) error); ok {
+		r2 = rf(ctx, repo, path)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
 }
 
-// MockService_CheckHealth_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CheckHealth'
-type MockService_CheckHealth_Call struct {
+// MockService_GetDocument_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDocument'
+type MockService_GetDocument_Call struct {
 	*mock.Call
 }
 
-// CheckHealth is a helper method to define mock.On call
+// GetDocument is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockService_Expecter) CheckHealth(ctx interface{}) *MockService_CheckHealth_Call {
-	return &MockService_CheckHealth_Call{Call: _e.mock.On("CheckHealth", ctx)}
+//   - repo string
+//   - path string
+func (_e *MockService_Expecter) GetDocument(ctx interface{}, repo interface{}, path interface{}) *MockService_GetDocument_Call {
+	return &MockService_GetDocument_Call{Call: _e.mock.On("GetDocument", ctx, repo, path)}
 }
 
-func (_c *MockService_CheckHealth_Call) Run(run func(ctx context.Context)) *MockService_CheckHealth_Call {
+func (_c *MockService_GetDocument_Call) Run(run func(ctx context.Context, repo string, path string)) *MockService_GetDocument_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockService_GetDocument_Call) Return(_a0 core.Document, _a1 []byte, _a2 error) *MockService_GetDocument_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *MockService_GetDocument_Call) RunAndReturn(run func(context.Context, string, string) (core.Document, []byte, error)) *MockService_GetDocument_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IngestDocuments provides a mock function with given fields: ctx, req
+func (_m *MockService) IngestDocuments(ctx context.Context, req core.IngestRequest) (*core.IngestResponse, error) {
+	ret := _m.Called(ctx, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IngestDocuments")
+	}
+
+	var r0 *core.IngestResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, core.IngestRequest) (*core.IngestResponse, error)); ok {
+		return rf(ctx, req)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, core.IngestRequest) *core.IngestResponse); ok {
+		r0 = rf(ctx, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*core.IngestResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, core.IngestRequest) error); ok {
+		r1 = rf(ctx, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockService_IngestDocuments_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IngestDocuments'
+type MockService_IngestDocuments_Call struct {
+	*mock.Call
+}
+
+// IngestDocuments is a helper method to define mock.On call
+//   - ctx context.Context
+//   - req core.IngestRequest
+func (_e *MockService_Expecter) IngestDocuments(ctx interface{}, req interface{}) *MockService_IngestDocuments_Call {
+	return &MockService_IngestDocuments_Call{Call: _e.mock.On("IngestDocuments", ctx, req)}
+}
+
+func (_c *MockService_IngestDocuments_Call) Run(run func(ctx context.Context, req core.IngestRequest)) *MockService_IngestDocuments_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(core.IngestRequest))
+	})
+	return _c
+}
+
+func (_c *MockService_IngestDocuments_Call) Return(_a0 *core.IngestResponse, _a1 error) *MockService_IngestDocuments_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockService_IngestDocuments_Call) RunAndReturn(run func(context.Context, core.IngestRequest) (*core.IngestResponse, error)) *MockService_IngestDocuments_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListDocuments provides a mock function with given fields: ctx, repo
+func (_m *MockService) ListDocuments(ctx context.Context, repo string) ([]core.DocumentMeta, error) {
+	ret := _m.Called(ctx, repo)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListDocuments")
+	}
+
+	var r0 []core.DocumentMeta
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]core.DocumentMeta, error)); ok {
+		return rf(ctx, repo)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []core.DocumentMeta); ok {
+		r0 = rf(ctx, repo)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]core.DocumentMeta)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, repo)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockService_ListDocuments_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListDocuments'
+type MockService_ListDocuments_Call struct {
+	*mock.Call
+}
+
+// ListDocuments is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+func (_e *MockService_Expecter) ListDocuments(ctx interface{}, repo interface{}) *MockService_ListDocuments_Call {
+	return &MockService_ListDocuments_Call{Call: _e.mock.On("ListDocuments", ctx, repo)}
+}
+
+func (_c *MockService_ListDocuments_Call) Run(run func(ctx context.Context, repo string)) *MockService_ListDocuments_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockService_ListDocuments_Call) Return(_a0 []core.DocumentMeta, _a1 error) *MockService_ListDocuments_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockService_ListDocuments_Call) RunAndReturn(run func(context.Context, string) ([]core.DocumentMeta, error)) *MockService_ListDocuments_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListRepos provides a mock function with given fields: ctx
+func (_m *MockService) ListRepos(ctx context.Context) ([]core.RepoInfo, error) {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListRepos")
+	}
+
+	var r0 []core.RepoInfo
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) ([]core.RepoInfo, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) []core.RepoInfo); ok {
+		r0 = rf(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]core.RepoInfo)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockService_ListRepos_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRepos'
+type MockService_ListRepos_Call struct {
+	*mock.Call
+}
+
+// ListRepos is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockService_Expecter) ListRepos(ctx interface{}) *MockService_ListRepos_Call {
+	return &MockService_ListRepos_Call{Call: _e.mock.On("ListRepos", ctx)}
+}
+
+func (_c *MockService_ListRepos_Call) Run(run func(ctx context.Context)) *MockService_ListRepos_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(context.Context))
 	})
 	return _c
 }
 
-func (_c *MockService_CheckHealth_Call) Return(_a0 error) *MockService_CheckHealth_Call {
-	_c.Call.Return(_a0)
+func (_c *MockService_ListRepos_Call) Return(_a0 []core.RepoInfo, _a1 error) *MockService_ListRepos_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockService_CheckHealth_Call) RunAndReturn(run func(context.Context) error) *MockService_CheckHealth_Call {
+func (_c *MockService_ListRepos_Call) RunAndReturn(run func(context.Context) ([]core.RepoInfo, error)) *MockService_ListRepos_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SearchDocs provides a mock function with given fields: ctx, query, opts
+func (_m *MockService) SearchDocs(ctx context.Context, query string, opts core.SearchOpts) (*core.SearchResults, error) {
+	ret := _m.Called(ctx, query, opts)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SearchDocs")
+	}
+
+	var r0 *core.SearchResults
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, core.SearchOpts) (*core.SearchResults, error)); ok {
+		return rf(ctx, query, opts)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, core.SearchOpts) *core.SearchResults); ok {
+		r0 = rf(ctx, query, opts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*core.SearchResults)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, core.SearchOpts) error); ok {
+		r1 = rf(ctx, query, opts)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockService_SearchDocs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SearchDocs'
+type MockService_SearchDocs_Call struct {
+	*mock.Call
+}
+
+// SearchDocs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - query string
+//   - opts core.SearchOpts
+func (_e *MockService_Expecter) SearchDocs(ctx interface{}, query interface{}, opts interface{}) *MockService_SearchDocs_Call {
+	return &MockService_SearchDocs_Call{Call: _e.mock.On("SearchDocs", ctx, query, opts)}
+}
+
+func (_c *MockService_SearchDocs_Call) Run(run func(ctx context.Context, query string, opts core.SearchOpts)) *MockService_SearchDocs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(core.SearchOpts))
+	})
+	return _c
+}
+
+func (_c *MockService_SearchDocs_Call) Return(_a0 *core.SearchResults, _a1 error) *MockService_SearchDocs_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockService_SearchDocs_Call) RunAndReturn(run func(context.Context, string, core.SearchOpts) (*core.SearchResults, error)) *MockService_SearchDocs_Call {
 	_c.Call.Return(run)
 	return _c
 }

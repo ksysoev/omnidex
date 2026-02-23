@@ -1,68 +1,568 @@
+//go:build !compile
+
 package core
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	mock "github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
-func TestNew(t *testing.T) {
-	users := NewMockuserRepo(t)
-	someAPI := NewMocksomeAPIProv(t)
-	svc := New(users, someAPI)
+// newTestService creates a Service with fresh mocks for each test.
+func newTestService(t *testing.T) (*Service, *MockdocStore, *MocksearchEngine, *MockmarkdownRenderer) {
+	t.Helper()
 
-	assert.NotNil(t, svc, "New() should return a non-nil Service instance")
+	store := NewMockdocStore(t)
+	search := NewMocksearchEngine(t)
+	renderer := NewMockmarkdownRenderer(t)
+	svc := New(store, search, renderer)
+
+	return svc, store, search, renderer
 }
 
-func TestService_CheckHealth(t *testing.T) {
-	tests := []struct {
-		setupMocks func(t *testing.T, users *MockuserRepo, someAPI *MocksomeAPIProv)
-		name       string
-		wantErr    bool
-	}{
-		{
-			name: "Success",
-			setupMocks: func(t *testing.T, users *MockuserRepo, someAPI *MocksomeAPIProv) {
-				t.Helper()
-				users.EXPECT().CheckHealth(mock.Anything).Return(nil)
-				someAPI.EXPECT().CheckHealth(mock.Anything).Return(nil)
-			},
-			wantErr: false,
-		},
-		{
-			name: "userRepo failure",
-			setupMocks: func(t *testing.T, users *MockuserRepo, someAPI *MocksomeAPIProv) {
-				t.Helper()
-				users.EXPECT().CheckHealth(mock.Anything).Return(assert.AnError)
-				someAPI.EXPECT().CheckHealth(mock.Anything).Return(nil)
-			},
-			wantErr: true,
-		},
-		{
-			name: "someAPI failure",
-			setupMocks: func(t *testing.T, users *MockuserRepo, someAPI *MocksomeAPIProv) {
-				t.Helper()
-				users.EXPECT().CheckHealth(mock.Anything).Return(nil)
-				someAPI.EXPECT().CheckHealth(mock.Anything).Return(assert.AnError)
-			},
-			wantErr: true,
+// newTestServiceOnly creates a Service with fresh mocks, returning only the Service.
+func newTestServiceOnly(t *testing.T) *Service {
+	t.Helper()
+
+	store := NewMockdocStore(t)
+	search := NewMocksearchEngine(t)
+	renderer := NewMockmarkdownRenderer(t)
+
+	return New(store, search, renderer)
+}
+
+func TestIngestDocuments_UpsertSuccess(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Hello\nWorld"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Hello")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Hello World")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Hello World").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc123",
+		Documents: []IngestDocument{
+			{Path: "docs/hello.md", Content: content, Action: "upsert"},
 		},
 	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+	assert.Equal(t, 0, resp.Deleted)
+}
+
+func TestIngestDocuments_UpsertVerifiesDocFields(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# My Title\nSome body"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("My Title")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("My Title Some body")
+
+	store.EXPECT().Save(mock.Anything, mock.MatchedBy(func(doc Document) bool {
+		return doc.ID == "owner/repo/docs/readme.md" &&
+			doc.Repo == "owner/repo" &&
+			doc.Path == "docs/readme.md" &&
+			doc.Title == "My Title" &&
+			doc.Content == content &&
+			doc.CommitSHA == "sha256" &&
+			!doc.UpdatedAt.IsZero()
+	})).Return(nil)
+
+	search.EXPECT().Index(mock.Anything, mock.Anything, "My Title Some body").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "sha256",
+		Documents: []IngestDocument{
+			{Path: "docs/readme.md", Content: content, Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+}
+
+func TestIngestDocuments_UpsertEmptyTitleFallsBackToPath(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "no heading here"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("no heading here")
+
+	store.EXPECT().Save(mock.Anything, mock.MatchedBy(func(doc Document) bool {
+		return doc.Title == "docs/untitled.md"
+	})).Return(nil)
+
+	search.EXPECT().Index(mock.Anything, mock.Anything, "no heading here").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: []IngestDocument{
+			{Path: "docs/untitled.md", Content: content, Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+}
+
+func TestIngestDocuments_DeleteSuccess(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/old.md").Return(nil)
+	search.EXPECT().Remove(mock.Anything, "owner/repo/docs/old.md").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: []IngestDocument{
+			{Path: "docs/old.md", Action: "delete"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.Indexed)
+	assert.Equal(t, 1, resp.Deleted)
+}
+
+func TestIngestDocuments_MixedActions(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	store.EXPECT().Delete(mock.Anything, "owner/repo", "old.md").Return(nil)
+	search.EXPECT().Remove(mock.Anything, "owner/repo/old.md").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: []IngestDocument{
+			{Path: "new.md", Content: content, Action: "upsert"},
+			{Path: "old.md", Action: "delete"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+	assert.Equal(t, 1, resp.Deleted)
+}
+
+func TestIngestDocuments_UnknownActionIsSkipped(t *testing.T) {
+	svc := newTestServiceOnly(t)
+	ctx := t.Context()
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: []IngestDocument{
+			{Path: "docs/weird.md", Content: "content", Action: "archive"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.Indexed)
+	assert.Equal(t, 0, resp.Deleted)
+}
+
+func TestIngestDocuments_EmptyDocuments(t *testing.T) {
+	svc := newTestServiceOnly(t)
+	ctx := t.Context()
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: nil,
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.Indexed)
+	assert.Equal(t, 0, resp.Deleted)
+}
+
+func TestIngestDocuments_UpsertErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		wantErrMsg string
+	}{
+		{
+			name: "store save error propagates",
+			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, renderer *MockmarkdownRenderer) {
+				renderer.EXPECT().ExtractTitle(mock.Anything).Return("Title")
+				store.EXPECT().Save(mock.Anything, mock.Anything).Return(errors.New("db connection lost"))
+			},
+			wantErrMsg: "db connection lost",
+		},
+		{
+			name: "search index error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+				renderer.EXPECT().ExtractTitle(mock.Anything).Return("Title")
+				renderer.EXPECT().ToPlainText(mock.Anything).Return("plain")
+				store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+				search.EXPECT().Index(mock.Anything, mock.Anything, "plain").Return(errors.New("index unavailable"))
+			},
+			wantErrMsg: "index unavailable",
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			users := NewMockuserRepo(t)
-			someAPI := NewMocksomeAPIProv(t)
-			s := New(users, someAPI)
+			svc, store, search, renderer := newTestService(t)
+			tt.setupMocks(store, search, renderer)
 
-			tt.setupMocks(t, users, someAPI)
+			req := IngestRequest{
+				Repo:      "owner/repo",
+				CommitSHA: "abc",
+				Documents: []IngestDocument{
+					{Path: "docs/fail.md", Content: "# Title\nbody", Action: "upsert"},
+				},
+			}
 
-			err := s.CheckHealth(t.Context())
+			resp, err := svc.IngestDocuments(t.Context(), req)
+			require.Error(t, err)
+			assert.Nil(t, resp)
+			assert.ErrorContains(t, err, tt.wantErrMsg)
+			assert.ErrorContains(t, err, "docs/fail.md")
+		})
+	}
+}
 
-			if tt.wantErr {
-				assert.Error(t, err, "CheckHealth() should return an error")
+func TestIngestDocuments_DeleteErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupMocks func(*MockdocStore, *MocksearchEngine)
+		wantErrMsg string
+	}{
+		{
+			name: "store delete error propagates",
+			setupMocks: func(store *MockdocStore, _ *MocksearchEngine) {
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(errors.New("delete failed"))
+			},
+			wantErrMsg: "delete failed",
+		},
+		{
+			name: "search remove error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine) {
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(nil)
+				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(errors.New("remove failed"))
+			},
+			wantErrMsg: "remove failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, store, search, _ := newTestService(t)
+			tt.setupMocks(store, search)
+
+			req := IngestRequest{
+				Repo:      "owner/repo",
+				CommitSHA: "abc",
+				Documents: []IngestDocument{
+					{Path: "docs/gone.md", Action: "delete"},
+				},
+			}
+
+			resp, err := svc.IngestDocuments(t.Context(), req)
+			require.Error(t, err)
+			assert.Nil(t, resp)
+			assert.ErrorContains(t, err, tt.wantErrMsg)
+			assert.ErrorContains(t, err, "docs/gone.md")
+		})
+	}
+}
+
+func TestGetDocument(t *testing.T) {
+	now := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		wantDoc    Document
+		setupMocks func(*MockdocStore, *MockmarkdownRenderer)
+		name       string
+		wantErr    string
+		wantHTML   []byte
+	}{
+		{
+			name: "success",
+			setupMocks: func(store *MockdocStore, renderer *MockmarkdownRenderer) {
+				doc := Document{
+					ID:        "owner/repo/docs/guide.md",
+					Repo:      "owner/repo",
+					Path:      "docs/guide.md",
+					Title:     "Guide",
+					Content:   "# Guide\nContent here",
+					CommitSHA: "abc",
+					UpdatedAt: now,
+				}
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/guide.md").Return(doc, nil)
+				renderer.EXPECT().ToHTML([]byte("# Guide\nContent here")).Return([]byte("<h1>Guide</h1><p>Content here</p>"), nil)
+			},
+			wantDoc: Document{
+				ID:        "owner/repo/docs/guide.md",
+				Repo:      "owner/repo",
+				Path:      "docs/guide.md",
+				Title:     "Guide",
+				Content:   "# Guide\nContent here",
+				CommitSHA: "abc",
+				UpdatedAt: now,
+			},
+			wantHTML: []byte("<h1>Guide</h1><p>Content here</p>"),
+		},
+		{
+			name: "store get error propagates",
+			setupMocks: func(store *MockdocStore, _ *MockmarkdownRenderer) {
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/missing.md").Return(Document{}, errors.New("not found"))
+			},
+			wantErr: "not found",
+		},
+		{
+			name: "renderer toHTML error propagates",
+			setupMocks: func(store *MockdocStore, renderer *MockmarkdownRenderer) {
+				doc := Document{
+					ID:      "owner/repo/docs/bad.md",
+					Content: "bad content",
+				}
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/bad.md").Return(doc, nil)
+				renderer.EXPECT().ToHTML([]byte("bad content")).Return(nil, errors.New("render error"))
+			},
+			wantErr: "render error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, store, _, renderer := newTestService(t)
+			tt.setupMocks(store, renderer)
+
+			repo := "owner/repo"
+
+			path := "docs/guide.md"
+
+			switch tt.name {
+			case "store get error propagates":
+				path = "docs/missing.md"
+			case "renderer toHTML error propagates":
+				path = "docs/bad.md"
+			}
+
+			doc, html, err := svc.GetDocument(t.Context(), repo, path)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErr)
+				assert.Equal(t, Document{}, doc)
+				assert.Nil(t, html)
 			} else {
-				assert.NoError(t, err, "CheckHealth() should not return an error")
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantDoc, doc)
+				assert.Equal(t, tt.wantHTML, html)
+			}
+		})
+	}
+}
+
+func TestSearchDocs(t *testing.T) {
+	tests := []struct {
+		setupMocks  func(*MocksearchEngine)
+		wantResults *SearchResults
+		name        string
+		query       string
+		wantErr     string
+		opts        SearchOpts
+	}{
+		{
+			name:  "success",
+			query: "hello world",
+			opts:  SearchOpts{Limit: 10, Offset: 0},
+			setupMocks: func(search *MocksearchEngine) {
+				results := &SearchResults{
+					Hits: []SearchResult{
+						{
+							ID:        "owner/repo/docs/hello.md",
+							Repo:      "owner/repo",
+							Path:      "docs/hello.md",
+							Title:     "Hello",
+							Fragments: []string{"<b>hello</b> <b>world</b>"},
+							Score:     1.5,
+						},
+					},
+					Total:    1,
+					Duration: 5 * time.Millisecond,
+				}
+				search.EXPECT().Search(mock.Anything, "hello world", SearchOpts{Limit: 10, Offset: 0}).Return(results, nil)
+			},
+			wantResults: &SearchResults{
+				Hits: []SearchResult{
+					{
+						ID:        "owner/repo/docs/hello.md",
+						Repo:      "owner/repo",
+						Path:      "docs/hello.md",
+						Title:     "Hello",
+						Fragments: []string{"<b>hello</b> <b>world</b>"},
+						Score:     1.5,
+					},
+				},
+				Total:    1,
+				Duration: 5 * time.Millisecond,
+			},
+		},
+		{
+			name:  "error propagates",
+			query: "broken query",
+			opts:  SearchOpts{Limit: 10},
+			setupMocks: func(search *MocksearchEngine) {
+				search.EXPECT().Search(mock.Anything, "broken query", SearchOpts{Limit: 10}).Return(nil, errors.New("search engine down"))
+			},
+			wantErr: "search engine down",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, _, search, _ := newTestService(t)
+			tt.setupMocks(search)
+
+			results, err := svc.SearchDocs(t.Context(), tt.query, tt.opts)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErr)
+				assert.Nil(t, results)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantResults, results)
+			}
+		})
+	}
+}
+
+func TestListRepos(t *testing.T) {
+	now := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		setupMocks func(*MockdocStore)
+		name       string
+		wantErr    string
+		wantRepos  []RepoInfo
+	}{
+		{
+			name: "success",
+			setupMocks: func(store *MockdocStore) {
+				repos := []RepoInfo{
+					{Name: "owner/repo-a", DocCount: 10, LastUpdated: now},
+					{Name: "owner/repo-b", DocCount: 3, LastUpdated: now.Add(-24 * time.Hour)},
+				}
+				store.EXPECT().ListRepos(mock.Anything).Return(repos, nil)
+			},
+			wantRepos: []RepoInfo{
+				{Name: "owner/repo-a", DocCount: 10, LastUpdated: now},
+				{Name: "owner/repo-b", DocCount: 3, LastUpdated: now.Add(-24 * time.Hour)},
+			},
+		},
+		{
+			name: "error propagates",
+			setupMocks: func(store *MockdocStore) {
+				store.EXPECT().ListRepos(mock.Anything).Return(nil, errors.New("db error"))
+			},
+			wantErr: "db error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, store, _, _ := newTestService(t)
+			tt.setupMocks(store)
+
+			repos, err := svc.ListRepos(t.Context())
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErr)
+				assert.Nil(t, repos)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantRepos, repos)
+			}
+		})
+	}
+}
+
+func TestListDocuments(t *testing.T) {
+	now := time.Date(2025, 3, 10, 8, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		setupMocks func(*MockdocStore)
+		name       string
+		repo       string
+		wantErr    string
+		wantDocs   []DocumentMeta
+	}{
+		{
+			name: "success",
+			repo: "owner/repo",
+			setupMocks: func(store *MockdocStore) {
+				docs := []DocumentMeta{
+					{ID: "owner/repo/readme.md", Repo: "owner/repo", Path: "readme.md", Title: "README", UpdatedAt: now},
+					{ID: "owner/repo/guide.md", Repo: "owner/repo", Path: "guide.md", Title: "Guide", UpdatedAt: now},
+				}
+				store.EXPECT().List(mock.Anything, "owner/repo").Return(docs, nil)
+			},
+			wantDocs: []DocumentMeta{
+				{ID: "owner/repo/readme.md", Repo: "owner/repo", Path: "readme.md", Title: "README", UpdatedAt: now},
+				{ID: "owner/repo/guide.md", Repo: "owner/repo", Path: "guide.md", Title: "Guide", UpdatedAt: now},
+			},
+		},
+		{
+			name: "error propagates",
+			repo: "owner/missing",
+			setupMocks: func(store *MockdocStore) {
+				store.EXPECT().List(mock.Anything, "owner/missing").Return(nil, errors.New("repo not found"))
+			},
+			wantErr: "repo not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, store, _, _ := newTestService(t)
+			tt.setupMocks(store)
+
+			docs, err := svc.ListDocuments(t.Context(), tt.repo)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tt.wantErr)
+				assert.Nil(t, docs)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantDocs, docs)
 			}
 		})
 	}

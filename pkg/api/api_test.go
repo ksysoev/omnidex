@@ -6,34 +6,40 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew_ValidConfig(t *testing.T) {
-	cfg := Config{Listen: ":8080"}
+	cfg := Config{Listen: ":8080", APIKeys: []string{"key1"}}
 	svc := NewMockService(t)
-	api, err := New(cfg, svc)
+	views := NewMockViewRenderer(t)
 
-	assert.NoError(t, err)
+	api, err := New(cfg, svc, views)
+
+	require.NoError(t, err)
 	assert.NotNil(t, api)
 }
 
-func TestNew_InvalidConfig(t *testing.T) {
+func TestNew_EmptyListen(t *testing.T) {
 	cfg := Config{Listen: ""}
 	svc := NewMockService(t)
-	_, err := New(cfg, svc)
+	views := NewMockViewRenderer(t)
+
+	_, err := New(cfg, svc, views)
 
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "listen address must be specified")
 }
 
-func TestAPI_Run_StartAndShutdown(t *testing.T) {
-	cfg := Config{Listen: "127.0.0.1:0"}
+func TestRun_GracefulShutdown(t *testing.T) {
+	cfg := Config{Listen: "127.0.0.1:0", APIKeys: []string{"key1"}}
 	svc := NewMockService(t)
-	api, err := New(cfg, svc)
+	views := NewMockViewRenderer(t)
 
-	assert.NoError(t, err)
+	api, err := New(cfg, svc, views)
+	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancel(t.Context())
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -41,6 +47,5 @@ func TestAPI_Run_StartAndShutdown(t *testing.T) {
 	}()
 
 	err = api.Run(ctx)
-
 	assert.NoError(t, err)
 }

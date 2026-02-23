@@ -3,40 +3,163 @@ package core
 
 import (
 	"context"
-
-	"golang.org/x/sync/errgroup"
+	"fmt"
+	"log/slog"
+	"time"
 )
 
-// userRepo defines the interface for user repository operations.
-type userRepo interface {
-	CheckHealth(ctx context.Context) error
+// docStore defines the interface for document persistence operations.
+type docStore interface {
+	Save(ctx context.Context, doc Document) error
+	Get(ctx context.Context, repo, path string) (Document, error)
+	Delete(ctx context.Context, repo, path string) error
+	List(ctx context.Context, repo string) ([]DocumentMeta, error)
+	ListRepos(ctx context.Context) ([]RepoInfo, error)
 }
 
-// someAPIProv defines the interface for a provider that can check health status.
-type someAPIProv interface {
-	CheckHealth(ctx context.Context) error
+// searchEngine defines the interface for full-text search operations.
+type searchEngine interface {
+	Index(ctx context.Context, doc Document, plainText string) error
+	Remove(ctx context.Context, docID string) error
+	Search(ctx context.Context, query string, opts SearchOpts) (*SearchResults, error)
+}
+
+// markdownRenderer defines the interface for markdown processing.
+type markdownRenderer interface {
+	ToHTML(src []byte) ([]byte, error)
+	ExtractTitle(src []byte) string
+	ToPlainText(src []byte) string
 }
 
 // Service encapsulates core business logic and dependencies.
 type Service struct {
-	users   userRepo
-	someAPI someAPIProv
+	store    docStore
+	search   searchEngine
+	renderer markdownRenderer
 }
 
-// New creates a new Service instance with the provided userRepo and someAPI.
-func New(users userRepo, someAPI someAPIProv) *Service {
+// New creates a new Service instance with the provided dependencies.
+func New(store docStore, search searchEngine, renderer markdownRenderer) *Service {
 	return &Service{
-		users:   users,
-		someAPI: someAPI,
+		store:    store,
+		search:   search,
+		renderer: renderer,
 	}
 }
 
-// CheckHealth checks the health of the core service and its dependencies.
-func (s *Service) CheckHealth(ctx context.Context) error {
-	eg, ctx := errgroup.WithContext(ctx)
+// IngestDocuments processes a batch of document upserts and deletes from a repository.
+func (s *Service) IngestDocuments(ctx context.Context, req IngestRequest) (*IngestResponse, error) {
+	var indexed, deleted int
 
-	eg.Go(func() error { return s.someAPI.CheckHealth(ctx) })
-	eg.Go(func() error { return s.users.CheckHealth(ctx) })
+	for _, ingestDoc := range req.Documents {
+		switch ingestDoc.Action {
+		case "upsert":
+			if err := s.upsertDocument(ctx, req.Repo, req.CommitSHA, ingestDoc); err != nil {
+				return nil, fmt.Errorf("failed to upsert document %s: %w", ingestDoc.Path, err)
+			}
 
-	return eg.Wait()
+			indexed++
+		case "delete":
+			if err := s.deleteDocument(ctx, req.Repo, ingestDoc.Path); err != nil {
+				return nil, fmt.Errorf("failed to delete document %s: %w", ingestDoc.Path, err)
+			}
+
+			deleted++
+		default:
+			slog.WarnContext(ctx, "unknown document action", "action", ingestDoc.Action, "path", ingestDoc.Path)
+		}
+	}
+
+	return &IngestResponse{
+		Indexed: indexed,
+		Deleted: deleted,
+	}, nil
+}
+
+// GetDocument retrieves a document and renders its markdown content to HTML.
+func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document, []byte, error) {
+	doc, err := s.store.Get(ctx, repo, path)
+	if err != nil {
+		return Document{}, nil, fmt.Errorf("failed to get document: %w", err)
+	}
+
+	html, err := s.renderer.ToHTML([]byte(doc.Content))
+	if err != nil {
+		return Document{}, nil, fmt.Errorf("failed to render document: %w", err)
+	}
+
+	return doc, html, nil
+}
+
+// SearchDocs performs a full-text search across all indexed documents.
+func (s *Service) SearchDocs(ctx context.Context, query string, opts SearchOpts) (*SearchResults, error) {
+	results, err := s.search.Search(ctx, query, opts)
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+
+	return results, nil
+}
+
+// ListRepos returns metadata for all indexed repositories.
+func (s *Service) ListRepos(ctx context.Context) ([]RepoInfo, error) {
+	repos, err := s.store.ListRepos(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list repos: %w", err)
+	}
+
+	return repos, nil
+}
+
+// ListDocuments returns metadata for all documents in a repository.
+func (s *Service) ListDocuments(ctx context.Context, repo string) ([]DocumentMeta, error) {
+	docs, err := s.store.List(ctx, repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	return docs, nil
+}
+
+func (s *Service) upsertDocument(ctx context.Context, repo, commitSHA string, ingestDoc IngestDocument) error {
+	title := s.renderer.ExtractTitle([]byte(ingestDoc.Content))
+	if title == "" {
+		title = ingestDoc.Path
+	}
+
+	doc := Document{
+		ID:        repo + "/" + ingestDoc.Path,
+		Repo:      repo,
+		Path:      ingestDoc.Path,
+		Title:     title,
+		Content:   ingestDoc.Content,
+		CommitSHA: commitSHA,
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.store.Save(ctx, doc); err != nil {
+		return fmt.Errorf("failed to save document: %w", err)
+	}
+
+	plainText := s.renderer.ToPlainText([]byte(ingestDoc.Content))
+
+	if err := s.search.Index(ctx, doc, plainText); err != nil {
+		return fmt.Errorf("failed to index document: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) deleteDocument(ctx context.Context, repo, path string) error {
+	docID := repo + "/" + path
+
+	if err := s.store.Delete(ctx, repo, path); err != nil {
+		return fmt.Errorf("failed to delete document: %w", err)
+	}
+
+	if err := s.search.Remove(ctx, docID); err != nil {
+		return fmt.Errorf("failed to remove document from index: %w", err)
+	}
+
+	return nil
 }

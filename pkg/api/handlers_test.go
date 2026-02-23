@@ -1,3 +1,5 @@
+//go:build !compile
+
 package api
 
 import (
@@ -6,44 +8,57 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-func TestAPI_healthCheck_OK(t *testing.T) {
-	mockSvc := NewMockService(t)
-	mockSvc.On("CheckHealth", mock.Anything).Return(nil)
-	api := &API{svc: mockSvc}
-	req := httptest.NewRequest("GET", "/health", http.NoBody)
-	w := httptest.NewRecorder()
+func TestHealthCheck(t *testing.T) {
+	api := &API{}
 
-	api.healthCheck(w, req)
+	req := httptest.NewRequest(http.MethodGet, "/livez", http.NoBody)
+	rec := httptest.NewRecorder()
 
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
-	}
+	api.healthCheck(rec, req)
 
-	if ct := resp.Header.Get("Content-Type"); ct != "text/plain" {
-		t.Errorf("expected Content-Type text/plain, got %q", ct)
-	}
-
-	body := w.Body.String()
-	if body != "Ok" {
-		t.Errorf("expected body 'Ok', got %q", body)
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/plain", rec.Header().Get("Content-Type"))
+	assert.Equal(t, "Ok", rec.Body.String())
 }
 
-func TestAPI_healthCheck_Error(t *testing.T) {
-	mockSvc := NewMockService(t)
-	mockSvc.On("CheckHealth", mock.Anything).Return(assert.AnError)
-	api := &API{svc: mockSvc}
-	req := httptest.NewRequest("GET", "/health", http.NoBody)
-	w := httptest.NewRecorder()
+func TestNewMux_RoutesRegistered(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
 
-	api.healthCheck(w, req)
+	api := &API{
+		svc:    svc,
+		views:  views,
+		config: Config{APIKeys: []string{"test-key"}},
+	}
 
-	resp := w.Result()
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("expected status 500, got %d", resp.StatusCode)
+	mux := api.newMux()
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		description   string
+		wantStatusNot int
+	}{
+		{
+			name:          "health check route exists",
+			method:        http.MethodGet,
+			path:          "/livez",
+			wantStatusNot: http.StatusNotFound,
+			description:   "health check should be registered",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, http.NoBody)
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			assert.NotEqual(t, tt.wantStatusNot, rec.Code, tt.description)
+		})
 	}
 }

@@ -6,23 +6,23 @@ import (
 	"strings"
 
 	"github.com/ksysoev/omnidex/pkg/api"
-	"github.com/ksysoev/omnidex/pkg/prov/someapi"
 	"github.com/spf13/viper"
 )
 
 type appConfig struct {
-	API      api.Config  `mapstructure:"api"`
-	Redis    RedisConfig `mapstructure:"redis"`
-	Provider Provider    `mapstructure:"provider"`
+	Storage StorageConfig `mapstructure:"storage"`
+	Search  SearchConfig  `mapstructure:"search"`
+	API     api.Config    `mapstructure:"api"`
 }
 
-type RedisConfig struct {
-	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password" json:"-"`
+// StorageConfig holds configuration for document storage.
+type StorageConfig struct {
+	Path string `mapstructure:"path"`
 }
 
-type Provider struct {
-	SomeAPI someapi.Config `mapstructure:"some_api"`
+// SearchConfig holds configuration for the search engine.
+type SearchConfig struct {
+	IndexPath string `mapstructure:"index_path"`
 }
 
 // loadConfig loads the application configuration from the specified file path and environment variables.

@@ -1,0 +1,30 @@
+name: 'Omnidex Publish Docs'
+description: 'Publish documentation from your repository to an Omnidex instance'
+
+inputs:
+  omnidex_url:
+    description: 'Base URL of the Omnidex instance (e.g., https://docs.example.com)'
+    required: true
+  api_key:
+    description: 'API key for authenticating with the Omnidex instance'
+    required: true
+  docs_path:
+    description: 'Path to the documentation directory relative to the repository root'
+    required: false
+    default: 'docs'
+  file_pattern:
+    description: 'Glob pattern for documentation files'
+    required: false
+    default: '**/*.md'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Publish docs to Omnidex
+      shell: bash
+      env:
+        OMNIDEX_URL: ${{ inputs.omnidex_url }}
+        OMNIDEX_API_KEY: ${{ inputs.api_key }}
+        DOCS_PATH: ${{ inputs.docs_path }}
+        FILE_PATTERN: ${{ inputs.file_pattern }}
+      run: ${{ github.action_path }}/entrypoint.sh

@@ -20,30 +20,14 @@ func TestRunCommand_InitLoggerFails(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to init logger")
 }
 
-func TestRunCommand_LoadConfigFails(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-
-	err := os.WriteFile(configPath, []byte("invalid config"), 0o600)
-	require.NoError(t, err)
-
-	flags := &cmdFlags{
-		ConfigPath: configPath,
-		LogLevel:   "info",
-	}
-
-	err = RunCommand(t.Context(), flags)
-	assert.ErrorContains(t, err, "failed to load config:")
-}
-
-func TestRunCommand_APIFails(t *testing.T) {
-	t.Setenv("API_LISTEN", "WRONG_ADDRESS_TO_LISTEN")
-	err := RunCommand(t.Context(), &cmdFlags{LogLevel: "info"})
-	assert.ErrorContains(t, err, "failed to run API service:")
-}
-
 func TestRunCommand_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	storagePath := filepath.Join(tmpDir, "repos")
+	indexPath := filepath.Join(tmpDir, "search.bleve")
+
 	t.Setenv("API_LISTEN", ":0")
+	t.Setenv("STORAGE_PATH", storagePath)
+	t.Setenv("SEARCH_INDEX_PATH", indexPath)
 
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -55,4 +39,44 @@ func TestRunCommand_Success(t *testing.T) {
 
 	err := RunCommand(ctx, &cmdFlags{LogLevel: "info"})
 	assert.NoError(t, err, "expected RunCommand to succeed with valid configuration")
+}
+
+func TestRunCommand_LoadConfigFails(t *testing.T) {
+	flags := &cmdFlags{
+		LogLevel:   "info",
+		ConfigPath: "/nonexistent/path/config.yaml",
+	}
+
+	err := RunCommand(t.Context(), flags)
+	assert.ErrorContains(t, err, "failed to load config")
+}
+
+func TestRunCommand_InvalidStoragePath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Set STORAGE_PATH to a path inside a file (not a dir), which should fail.
+	invalidPath := filepath.Join(tmpDir, "not-a-dir")
+
+	// Create a regular file at invalidPath so subdirectory creation will fail.
+	err := writeFile(invalidPath)
+	require.NoError(t, err)
+
+	storagePath := filepath.Join(invalidPath, "repos")
+
+	t.Setenv("API_LISTEN", ":0")
+	t.Setenv("STORAGE_PATH", storagePath)
+	t.Setenv("SEARCH_INDEX_PATH", filepath.Join(tmpDir, "search.bleve"))
+
+	err = RunCommand(t.Context(), &cmdFlags{LogLevel: "info"})
+	assert.Error(t, err)
+}
+
+// writeFile creates a regular file at the given path.
+func writeFile(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	return f.Close()
 }

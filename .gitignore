@@ -30,3 +30,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Omnidex data
+data/
+*.bleve
+
+# Generated CSS (built from Tailwind)
+static/css/style.css
