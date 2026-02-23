@@ -55,7 +55,7 @@ func runHealthCheck(ctx context.Context, baseURL string) error {
 		return fmt.Errorf("health check returned status %d", resp.StatusCode)
 	}
 
-	fmt.Println("ok") //nolint:forbidigo // CLI output is intentional
+	fmt.Println("Ok") //nolint:forbidigo // CLI output is intentional
 
 	return nil
 }
