@@ -33,3 +33,15 @@ dev-css: ## Watch and rebuild Tailwind CSS on changes
 
 run: build ## Build and run the server
 	./omnidex serve --config runtime/config.yml
+
+up: ## Start the docker-compose development environment
+	docker compose up --build -d
+
+down: ## Stop and clean up containers and volumes
+	docker compose down -v
+
+build-docker: ## Build the Docker image locally
+	docker build -t omnidex:local .
+
+seed: ## Publish sample docs to the running local instance
+	docker compose --profile seed up omnidex-seed

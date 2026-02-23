@@ -1,0 +1,35 @@
+services:
+  omnidex:
+    build: .
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - omnidex-data:/data
+    healthcheck:
+      test: ["CMD", "omnidex", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  omnidex-seed:
+    image: alpine:3.21
+    depends_on:
+      omnidex:
+        condition: service_healthy
+    volumes:
+      - ./scripts/seed.sh:/seed.sh:ro
+      - ./docs/sample:/docs:ro
+    environment:
+      OMNIDEX_URL: http://omnidex:8080
+      OMNIDEX_API_KEY: changeme
+      DOCS_PATH: /docs
+    entrypoint: ["sh", "-c", "apk add --no-cache curl jq bash > /dev/null 2>&1 && bash /seed.sh"]
+    restart: "no"
+    profiles:
+      - seed
+
+volumes:
+  omnidex-data:
