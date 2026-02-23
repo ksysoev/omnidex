@@ -42,7 +42,7 @@ func TestRenderer_ToHTML(t *testing.T) {
 		{
 			name:     "link",
 			input:    "[Go](https://go.dev)",
-			contains: `<a href="https://go.dev">Go</a>`,
+			contains: `<a href="https://go.dev" rel="nofollow">Go</a>`,
 		},
 	}
 
@@ -89,6 +89,40 @@ func TestRenderer_ExtractTitle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := r.ExtractTitle([]byte(tt.input))
 			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+func TestRenderer_ToHTML_Sanitization(t *testing.T) {
+	r := New()
+
+	tests := []struct {
+		name     string
+		input    string
+		excludes string
+	}{
+		{
+			name:     "strips javascript links",
+			input:    `[click me](javascript:alert('xss'))`,
+			excludes: "javascript:",
+		},
+		{
+			name:     "strips script tags",
+			input:    `<script>alert('xss')</script>`,
+			excludes: "<script>",
+		},
+		{
+			name:     "strips onerror attributes",
+			input:    `<img src=x onerror="alert('xss')">`,
+			excludes: "onerror",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.ToHTML([]byte(tt.input))
+			assert.NoError(t, err)
+			assert.NotContains(t, string(result), tt.excludes)
 		})
 	}
 }

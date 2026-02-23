@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	defaultTimeout = 5 * time.Second
+	defaultTimeout  = 5 * time.Second
+	shutdownTimeout = 10 * time.Second
 )
 
 // API is the main HTTP server that serves both the ingest API and the documentation portal.
@@ -64,8 +65,8 @@ func New(cfg Config, svc Service, views ViewRenderer) (*API, error) {
 
 // Run starts the API server with the provided configuration.
 // It listens on the address specified in the configuration and handles graceful shutdown.
-// The server will log any errors encountered during shutdown.
-// If the server fails to start, it returns an error.
+// When the context is cancelled, in-flight requests are given a grace period to complete
+// before the server is forcefully closed.
 func (a *API) Run(ctx context.Context) error {
 	s := &http.Server{
 		Addr:              a.config.Listen,
@@ -77,9 +78,18 @@ func (a *API) Run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 
-		err := s.Close()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
 
-		slog.WarnContext(ctx, "shutting down API server", "error", err)
+		slog.WarnContext(ctx, "shutting down API server")
+
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			slog.ErrorContext(ctx, "graceful shutdown failed, forcing close", "error", err)
+
+			if closeErr := s.Close(); closeErr != nil {
+				slog.ErrorContext(ctx, "forced close failed", "error", closeErr)
+			}
+		}
 	}()
 
 	if err := s.ListenAndServe(); err != http.ErrServerClosed {

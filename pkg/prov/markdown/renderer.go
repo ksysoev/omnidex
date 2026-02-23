@@ -6,24 +6,29 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 )
 
 // Renderer converts markdown content to HTML, extracts titles, and strips markdown to plain text.
+// HTML output is sanitized using bluemonday to prevent XSS attacks from user-submitted markdown.
 type Renderer struct {
-	md goldmark.Markdown
+	md       goldmark.Markdown
+	sanitize *bluemonday.Policy
 }
 
-// New creates a new Renderer with default goldmark configuration.
+// New creates a new Renderer with default goldmark configuration and HTML sanitization.
 func New() *Renderer {
 	md := goldmark.New()
+	policy := bluemonday.UGCPolicy()
 
-	return &Renderer{md: md}
+	return &Renderer{md: md, sanitize: policy}
 }
 
-// ToHTML converts markdown source to HTML.
+// ToHTML converts markdown source to sanitized HTML.
+// The output is sanitized to prevent XSS from crafted markdown inputs.
 func (r *Renderer) ToHTML(src []byte) ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -31,7 +36,9 @@ func (r *Renderer) ToHTML(src []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to convert markdown to HTML: %w", err)
 	}
 
-	return buf.Bytes(), nil
+	sanitized := r.sanitize.SanitizeBytes(buf.Bytes())
+
+	return sanitized, nil
 }
 
 // ExtractTitle extracts the title from the first H1 heading in the markdown content.

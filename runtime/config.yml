@@ -1,3 +1,5 @@
+# Development configuration only. Do not use in production.
+# Override api_keys with secure values via environment variables or a separate config file.
 api:
   listen: :8080
   api_keys:

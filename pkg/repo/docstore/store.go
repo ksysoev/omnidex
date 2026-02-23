@@ -4,6 +4,7 @@ package docstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,12 @@ const (
 	metaFileName = "meta.json"
 	docsDir      = "docs"
 )
+
+// ErrNotFound is returned when a requested document does not exist.
+var ErrNotFound = errors.New("document not found")
+
+// ErrInvalidPath is returned when a document path attempts directory traversal.
+var ErrInvalidPath = errors.New("invalid path: directory traversal not allowed")
 
 // repoMeta holds metadata about an indexed repository.
 type repoMeta struct {
@@ -42,15 +49,41 @@ type Store struct {
 
 // New creates a new filesystem-based document store rooted at basePath.
 func New(basePath string) (*Store, error) {
-	if err := os.MkdirAll(basePath, 0o750); err != nil {
+	absBase, err := filepath.Abs(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve storage path: %w", err)
+	}
+
+	if err := os.MkdirAll(absBase, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
-	return &Store{basePath: basePath}, nil
+	return &Store{basePath: absBase}, nil
+}
+
+// validatePath ensures the given segments, when joined to the base path,
+// do not escape the base directory via path traversal.
+func (s *Store) validatePath(segments ...string) error {
+	joined := filepath.Join(append([]string{s.basePath}, segments...)...)
+
+	resolved, err := filepath.Abs(joined)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalidPath, err)
+	}
+
+	if !strings.HasPrefix(resolved, s.basePath+string(filepath.Separator)) && resolved != s.basePath {
+		return fmt.Errorf("%w: resolved path escapes base directory", ErrInvalidPath)
+	}
+
+	return nil
 }
 
 // Save persists a document to the filesystem.
 func (s *Store) Save(_ context.Context, doc core.Document) error { //nolint:gocritic // Document is passed by value for immutability
+	if err := s.validatePath(doc.Repo, docsDir, doc.Path); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -92,6 +125,10 @@ func (s *Store) Save(_ context.Context, doc core.Document) error { //nolint:gocr
 
 // Get retrieves a document by its repository and path.
 func (s *Store) Get(_ context.Context, repo, path string) (core.Document, error) {
+	if err := s.validatePath(repo, docsDir, path); err != nil {
+		return core.Document{}, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -100,7 +137,7 @@ func (s *Store) Get(_ context.Context, repo, path string) (core.Document, error)
 	content, err := os.ReadFile(docPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return core.Document{}, fmt.Errorf("document not found: %s/%s", repo, path)
+			return core.Document{}, fmt.Errorf("%w: %s/%s", ErrNotFound, repo, path)
 		}
 
 		return core.Document{}, fmt.Errorf("failed to read document: %w", err)
@@ -124,6 +161,10 @@ func (s *Store) Get(_ context.Context, repo, path string) (core.Document, error)
 
 // Delete removes a document from the filesystem.
 func (s *Store) Delete(_ context.Context, repo, path string) error {
+	if err := s.validatePath(repo, docsDir, path); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -145,6 +186,10 @@ func (s *Store) Delete(_ context.Context, repo, path string) error {
 
 // List returns metadata for all documents in a repository.
 func (s *Store) List(_ context.Context, repo string) ([]core.DocumentMeta, error) {
+	if err := s.validatePath(repo); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

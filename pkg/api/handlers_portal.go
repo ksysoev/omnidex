@@ -1,11 +1,12 @@
 package api
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/ksysoev/omnidex/pkg/core"
+	"github.com/ksysoev/omnidex/pkg/repo/docstore"
 )
 
 // isHTMXRequest checks if the request was made by HTMX.
@@ -45,7 +46,7 @@ func (a *API) docPage(w http.ResponseWriter, r *http.Request) {
 
 	doc, html, err := a.svc.GetDocument(r.Context(), fullRepo, path)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, docstore.ErrNotFound) {
 			http.NotFound(w, r)
 			return
 		}

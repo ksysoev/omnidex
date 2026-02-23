@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ksysoev/omnidex/pkg/core"
+	"github.com/ksysoev/omnidex/pkg/repo/docstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -119,7 +120,7 @@ func TestDocPage_NotFound(t *testing.T) {
 	views := NewMockViewRenderer(t)
 
 	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/missing.md").
-		Return(core.Document{}, nil, fmt.Errorf("document not found"))
+		Return(core.Document{}, nil, fmt.Errorf("failed to get document: %w", docstore.ErrNotFound))
 
 	api := &API{svc: svc, views: views}
 
