@@ -24,9 +24,9 @@ type DocumentMeta struct {
 
 // RepoInfo contains metadata about an indexed repository.
 type RepoInfo struct {
-	LastUpdated time.Time
-	Name        string
-	DocCount    int
+	LastUpdated time.Time `json:"last_updated"`
+	Name        string    `json:"name"`
+	DocCount    int       `json:"doc_count"`
 }
 
 // SearchResult represents a single search result with highlighted snippets.

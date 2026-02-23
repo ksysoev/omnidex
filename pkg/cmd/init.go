@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// BuildInfo holds the build metadata injected at compile time.
 type BuildInfo struct {
 	Version string
 	AppName string
@@ -31,9 +32,6 @@ func InitCommand(build BuildInfo) cobra.Command {
 		Use:   flags.appName,
 		Short: "Centralized documentation portal for your repos",
 		Long:  "Omnidex is a centralized documentation portal that aggregates and serves documentation from your repositories.",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return RunCommand(cmd.Context(), &flags)
-		},
 	}
 
 	cmd.PersistentFlags().StringVar(&flags.LogLevel, "log-level", "info", "log level (debug, info, warn, error)")
@@ -51,6 +49,19 @@ func InitCommand(build BuildInfo) cobra.Command {
 	if err := viper.Unmarshal(&flags); err != nil {
 		slog.Error("failed to unmarshal env vars", "error", err)
 	}
+
+	serveCmd := &cobra.Command{
+		Use:   "serve",
+		Short: "Start the omnidex API server",
+		Long:  "Start the omnidex API server that serves both the documentation portal and the ingest API.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return RunCommand(cmd.Context(), &flags)
+		},
+	}
+
+	healthCmd := newHealthCmd()
+
+	cmd.AddCommand(serveCmd, healthCmd)
 
 	return cmd
 }

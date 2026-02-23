@@ -1,0 +1,39 @@
+services:
+  omnidex:
+    build: .
+    environment:
+      API_LISTEN: "${API_LISTEN:-:8080}"
+      API_API_KEYS: "${API_API_KEYS:-changeme}"
+      STORAGE_PATH: "${STORAGE_PATH:-/data/docs}"
+      SEARCH_INDEX_PATH: "${SEARCH_INDEX_PATH:-/data/search}"
+      LOG_LEVEL: "${LOG_LEVEL:-debug}"
+      LOG_TEXT: "${LOG_TEXT:-true}"
+    ports:
+      - "${API_LISTEN_HOST:-8080}:8080"
+    volumes:
+      - omnidex-data:/data
+    healthcheck:
+      test: ["CMD", "omnidex", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  omnidex-seed:
+    image: alpine:3.21
+    depends_on:
+      omnidex:
+        condition: service_healthy
+    volumes:
+      - ./scripts/seed.sh:/seed.sh:ro
+      - ./docs/sample:/docs:ro
+    environment:
+      OMNIDEX_URL: http://omnidex:8080
+      OMNIDEX_API_KEY: "${API_API_KEYS:-changeme}"
+      DOCS_PATH: /docs
+    entrypoint: ["sh", "-c", "apk add --no-cache curl jq bash > /dev/null 2>&1 && bash /seed.sh"]
+    restart: "no"
+
+volumes:
+  omnidex-data:
