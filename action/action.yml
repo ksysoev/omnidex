@@ -18,13 +18,15 @@ inputs:
     default: '**/*.md'
 
 runs:
-  using: 'composite'
-  steps:
-    - name: Publish docs to Omnidex
-      shell: bash
-      env:
-        OMNIDEX_URL: ${{ inputs.omnidex_url }}
-        OMNIDEX_API_KEY: ${{ inputs.api_key }}
-        DOCS_PATH: ${{ inputs.docs_path }}
-        FILE_PATTERN: ${{ inputs.file_pattern }}
-      run: ${{ github.action_path }}/entrypoint.sh
+  using: 'docker'
+  image: 'docker://ghcr.io/ksysoev/omnidex:latest'
+  args:
+    - publish
+    - --url
+    - ${{ inputs.omnidex_url }}
+    - --api-key
+    - ${{ inputs.api_key }}
+    - --docs-path
+    - /github/workspace/${{ inputs.docs_path }}
+    - --file-pattern
+    - ${{ inputs.file_pattern }}
