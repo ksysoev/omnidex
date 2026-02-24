@@ -271,10 +271,23 @@ func TestRunPublish_NoFiles(t *testing.T) {
 		APIKey:      "key",
 		DocsPath:    dir,
 		FilePattern: "**/*.md",
+		Repo:        "owner/repo",
 	}
 
 	err := runPublish(t.Context(), cmdFlags, pubFlags)
 	assert.NoError(t, err)
+}
+
+func TestRunPublish_MissingRepo(t *testing.T) {
+	cmdFlags := &cmdFlags{LogLevel: "error", TextFormat: true}
+	pubFlags := &publishFlags{
+		URL:    "http://localhost",
+		APIKey: "key",
+	}
+
+	err := runPublish(t.Context(), cmdFlags, pubFlags)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--repo")
 }
 
 func TestNewPublishCmd(t *testing.T) {

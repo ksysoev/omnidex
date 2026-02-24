@@ -24,9 +24,9 @@ runs:
     - publish
     - --url
     - ${{ inputs.omnidex_url }}
-    - --api-key
-    - ${{ inputs.api_key }}
     - --docs-path
     - /github/workspace/${{ inputs.docs_path }}
     - --file-pattern
     - ${{ inputs.file_pattern }}
+  env:
+    OMNIDEX_API_KEY: ${{ inputs.api_key }}

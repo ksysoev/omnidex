@@ -24,7 +24,7 @@ const publishRequestTimeout = 30 * time.Second
 
 type publishFlags struct {
 	URL         string
-	APIKey      string //nolint:gosec // Not a credential, just a flag name for the CLI
+	APIKey      string //nolint:gosec // Suppresses false positive on field name; value is a runtime-provided bearer token from CLI/env.
 	DocsPath    string
 	FilePattern string
 	Repo        string
@@ -91,6 +91,10 @@ func runPublish(ctx context.Context, flags *cmdFlags, pubFlags *publishFlags) er
 
 	if pubFlags.APIKey == "" {
 		return fmt.Errorf("--api-key (or OMNIDEX_API_KEY) is required")
+	}
+
+	if pubFlags.Repo == "" {
+		return fmt.Errorf("--repo (or GITHUB_REPOSITORY) is required")
 	}
 
 	slog.Info("Publishing documentation",
