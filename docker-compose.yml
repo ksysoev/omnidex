@@ -21,18 +21,25 @@ services:
     restart: unless-stopped
 
   omnidex-seed:
-    image: alpine:3.21
+    build: .
     depends_on:
       omnidex:
         condition: service_healthy
     volumes:
-      - ./scripts/seed.sh:/seed.sh:ro
       - ./docs/sample:/docs:ro
     environment:
-      OMNIDEX_URL: http://omnidex:8080
       OMNIDEX_API_KEY: "${API_API_KEYS:-changeme}"
-      DOCS_PATH: /docs
-    entrypoint: ["sh", "-c", "apk add --no-cache curl jq bash > /dev/null 2>&1 && bash /seed.sh"]
+    entrypoint:
+      - omnidex
+      - publish
+      - --url
+      - http://omnidex:8080
+      - --docs-path
+      - /docs
+      - --repo
+      - omnidex/omnidex
+      - --commit-sha
+      - local
     restart: "no"
 
 volumes:
