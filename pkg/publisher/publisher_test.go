@@ -60,6 +60,17 @@ func TestCollectFiles_NonExistentDirectory(t *testing.T) {
 	assert.Nil(t, files)
 }
 
+func TestCollectFiles_FileInsteadOfDirectory(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "notadir.md")
+	require.NoError(t, os.WriteFile(filePath, []byte("# Hello"), 0o600))
+
+	files, err := CollectFiles(filePath, "**/*.md")
+	assert.Error(t, err)
+	assert.Nil(t, files)
+	assert.Contains(t, err.Error(), "is not a directory")
+}
+
 func TestCollectFiles_CustomPattern(t *testing.T) {
 	dir := t.TempDir()
 

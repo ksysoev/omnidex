@@ -69,9 +69,22 @@ func (p *Publisher) Publish(ctx context.Context, docsPath, filePattern, repo, co
 // matching the given glob pattern. The returned map keys are relative paths from docsPath
 // using forward slashes.
 func CollectFiles(docsPath, filePattern string) (map[string]string, error) {
+	info, err := os.Stat(docsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat docs path %s: %w", docsPath, err)
+	}
+
+	if !info.IsDir() {
+		return nil, fmt.Errorf("docs path %s is not a directory", docsPath)
+	}
+
+	// Normalize the file pattern to use forward slashes so that patterns with
+	// backslashes (common on Windows) match the forward-slash normalized relPath.
+	filePattern = filepath.ToSlash(filePattern)
+
 	files := make(map[string]string)
 
-	err := filepath.WalkDir(docsPath, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(docsPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
