@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/blevesearch/bleve/v2 v2.5.7
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/google/uuid v1.6.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/spf13/cobra v1.10.2

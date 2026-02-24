@@ -60,8 +60,9 @@ func InitCommand(build BuildInfo) cobra.Command {
 	}
 
 	healthCmd := newHealthCmd()
+	publishCmd := newPublishCmd(&flags)
 
-	cmd.AddCommand(serveCmd, healthCmd)
+	cmd.AddCommand(serveCmd, healthCmd, publishCmd)
 
 	return cmd
 }
