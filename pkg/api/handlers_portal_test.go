@@ -180,6 +180,33 @@ func TestRepoIndexPage_MissingValues(t *testing.T) {
 	}
 }
 
+func TestRepoIndexPage_RenderError(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	docs := []core.DocumentMeta{
+		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README", UpdatedAt: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(docs, nil)
+	views.EXPECT().RenderRepoIndex(mock.Anything, "owner/repo", docs, false).Return(fmt.Errorf("render error"))
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+
+	rec := httptest.NewRecorder()
+
+	api.repoIndexPage(rec, req)
+
+	// The handler sets 200 + Content-Type before calling RenderRepoIndex,
+	// so the status is already written even though rendering failed.
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
 func TestRepoIndexPage_EmptyRepo(t *testing.T) {
 	svc := NewMockService(t)
 	views := NewMockViewRenderer(t)
