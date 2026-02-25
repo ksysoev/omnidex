@@ -31,14 +31,46 @@ func (a *API) homePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// docPage handles GET /docs/{owner}/{repo}/{path...} - renders a document.
+// repoIndexPage handles GET /docs/{owner}/{repo}/ - renders the document list for a repository.
+func (a *API) repoIndexPage(w http.ResponseWriter, r *http.Request) {
+	owner := r.PathValue("owner")
+	repo := r.PathValue("repo")
+
+	if owner == "" || repo == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	fullRepo := owner + "/" + repo
+
+	docs, err := a.svc.ListDocuments(r.Context(), fullRepo)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Failed to list documents", "error", err, "repo", fullRepo)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	if err := a.views.RenderRepoIndex(w, fullRepo, docs, isHTMXRequest(r)); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to render repo index page", "error", err)
+	}
+}
+
+// docPage handles GET /docs/{owner}/{repo}/{path...} - renders a document or repo index.
 func (a *API) docPage(w http.ResponseWriter, r *http.Request) {
 	owner := r.PathValue("owner")
 	repo := r.PathValue("repo")
 	path := r.PathValue("path")
 
-	if owner == "" || repo == "" || path == "" {
+	if owner == "" || repo == "" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if path == "" {
+		a.repoIndexPage(w, r)
 		return
 	}
 

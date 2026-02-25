@@ -69,6 +69,59 @@ func TestRenderHome_EmptyRepos(t *testing.T) {
 	assert.Contains(t, output, "No repositories indexed yet.")
 }
 
+func TestRenderRepoIndex_FullPage(t *testing.T) {
+	r := New()
+
+	docs := []core.DocumentMeta{
+		{ID: "my-org/repo/getting-started.md", Repo: "my-org/repo", Path: "getting-started.md", Title: "Getting Started", UpdatedAt: time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)},
+		{ID: "my-org/repo/advanced.md", Repo: "my-org/repo", Path: "advanced.md", Title: "Advanced Usage", UpdatedAt: time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	var buf bytes.Buffer
+
+	err := r.RenderRepoIndex(&buf, "my-org/repo", docs, false)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "<!DOCTYPE html>")
+	assert.Contains(t, output, "<nav")
+	assert.Contains(t, output, "my-org/repo")
+	assert.Contains(t, output, "Getting Started")
+	assert.Contains(t, output, "Advanced Usage")
+	assert.Contains(t, output, "getting-started.md")
+	assert.Contains(t, output, "advanced.md")
+}
+
+func TestRenderRepoIndex_Partial(t *testing.T) {
+	r := New()
+
+	docs := []core.DocumentMeta{
+		{ID: "my-org/repo/readme.md", Repo: "my-org/repo", Path: "readme.md", Title: "README", UpdatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	var buf bytes.Buffer
+
+	err := r.RenderRepoIndex(&buf, "my-org/repo", docs, true)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.NotContains(t, output, "<!DOCTYPE html>")
+	assert.Contains(t, output, "my-org/repo")
+	assert.Contains(t, output, "README")
+}
+
+func TestRenderRepoIndex_EmptyDocs(t *testing.T) {
+	r := New()
+
+	var buf bytes.Buffer
+
+	err := r.RenderRepoIndex(&buf, "my-org/repo", nil, false)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No documents in this repository yet.")
+}
+
 func TestRenderDoc_FullPage(t *testing.T) {
 	r := New()
 
