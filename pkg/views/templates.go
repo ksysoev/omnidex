@@ -124,6 +124,37 @@ const searchResultsBody = `{{if .Results}}
     <p class="text-gray-400">Enter a search query above to find documentation.</p>
 {{end}}`
 
+// repoIndexContentBody is the repo index page content template.
+const repoIndexContentBody = `
+<div>
+    <div class="mb-4 text-sm text-gray-500">
+        <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+        <span class="mx-1">/</span>
+        <span>{{.Repo}}</span>
+    </div>
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">{{.Repo}}</h1>
+    {{if .Docs}}
+    <div class="space-y-3">
+        {{range .Docs}}
+        <a href="/docs/{{.Repo}}/{{.Path}}"
+           hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
+           class="block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
+            <h2 class="text-lg font-medium text-blue-600 mb-1">{{.Title}}</h2>
+            <div class="flex items-center gap-4 text-sm text-gray-500">
+                <span>{{.Path}}</span>
+                <span>Updated {{.UpdatedAt.Format "Jan 02, 2006"}}</span>
+            </div>
+        </a>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="text-center py-16">
+        <p class="text-gray-500 text-lg mb-4">No documents in this repository yet.</p>
+        <p class="text-gray-400">Publish documentation using the Omnidex GitHub Action to get started.</p>
+    </div>
+    {{end}}
+</div>`
+
 // notFoundBody is the 404 page content template.
 const notFoundBody = `
 <div class="text-center py-16">

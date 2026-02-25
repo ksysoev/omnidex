@@ -78,6 +78,155 @@ func TestHomePage_ServiceError(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "Internal Server Error")
 }
 
+func TestRepoIndexPage_Success(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	docs := []core.DocumentMeta{
+		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README", UpdatedAt: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "owner/repo/docs/guide.md", Repo: "owner/repo", Path: "docs/guide.md", Title: "Guide", UpdatedAt: time.Date(2025, 6, 2, 0, 0, 0, 0, time.UTC)},
+	}
+
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(docs, nil)
+	views.EXPECT().RenderRepoIndex(mock.Anything, "owner/repo", docs, false).Return(nil)
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+
+	rec := httptest.NewRecorder()
+
+	api.repoIndexPage(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
+func TestRepoIndexPage_HTMXPartial(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	docs := []core.DocumentMeta{
+		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README", UpdatedAt: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(docs, nil)
+	views.EXPECT().RenderRepoIndex(mock.Anything, "owner/repo", docs, true).Return(nil)
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/", http.NoBody)
+	req.Header.Set("HX-Request", "true")
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+
+	rec := httptest.NewRecorder()
+
+	api.repoIndexPage(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
+func TestRepoIndexPage_ServiceError(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(nil, fmt.Errorf("storage error"))
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+
+	rec := httptest.NewRecorder()
+
+	api.repoIndexPage(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Internal Server Error")
+}
+
+func TestRepoIndexPage_MissingValues(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	api := &API{svc: svc, views: views}
+
+	tests := []struct {
+		name  string
+		owner string
+		repo  string
+	}{
+		{name: "missing owner", owner: "", repo: "repo"},
+		{name: "missing repo", owner: "owner", repo: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/docs/x/y/", http.NoBody)
+			req.SetPathValue("owner", tt.owner)
+			req.SetPathValue("repo", tt.repo)
+
+			rec := httptest.NewRecorder()
+
+			api.repoIndexPage(rec, req)
+
+			assert.Equal(t, http.StatusNotFound, rec.Code)
+		})
+	}
+}
+
+func TestRepoIndexPage_EmptyRepo(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return([]core.DocumentMeta{}, nil)
+	views.EXPECT().RenderRepoIndex(mock.Anything, "owner/repo", []core.DocumentMeta{}, false).Return(nil)
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+
+	rec := httptest.NewRecorder()
+
+	api.repoIndexPage(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
+func TestDocPage_EmptyPathDelegatesToRepoIndex(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	docs := []core.DocumentMeta{
+		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README", UpdatedAt: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(docs, nil)
+	views.EXPECT().RenderRepoIndex(mock.Anything, "owner/repo", docs, false).Return(nil)
+
+	api := &API{svc: svc, views: views}
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/owner/repo/", http.NoBody)
+	req.SetPathValue("owner", "owner")
+	req.SetPathValue("repo", "repo")
+	req.SetPathValue("path", "")
+
+	rec := httptest.NewRecorder()
+
+	api.docPage(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
+}
+
 func TestDocPage_Success(t *testing.T) {
 	svc := NewMockService(t)
 	views := NewMockViewRenderer(t)
@@ -150,7 +299,6 @@ func TestDocPage_MissingPathValues(t *testing.T) {
 	}{
 		{name: "missing owner", owner: "", repo: "repo", path: "docs/readme.md"},
 		{name: "missing repo", owner: "owner", repo: "", path: "docs/readme.md"},
-		{name: "missing path", owner: "owner", repo: "repo", path: ""},
 	}
 
 	for _, tt := range tests {

@@ -11,14 +11,16 @@ import (
 
 // Renderer renders HTML views for the documentation portal.
 type Renderer struct {
-	homeFull      *template.Template
-	homePartial   *template.Template
-	docFull       *template.Template
-	docPartial    *template.Template
-	searchFull    *template.Template
-	searchPartial *template.Template
-	searchResults *template.Template
-	notFoundFull  *template.Template
+	homeFull         *template.Template
+	homePartial      *template.Template
+	repoIndexFull    *template.Template
+	repoIndexPartial *template.Template
+	docFull          *template.Template
+	docPartial       *template.Template
+	searchFull       *template.Template
+	searchPartial    *template.Template
+	searchResults    *template.Template
+	notFoundFull     *template.Template
 }
 
 // New creates a new view Renderer with all templates parsed.
@@ -30,14 +32,16 @@ func New() *Renderer {
 	}
 
 	return &Renderer{
-		homeFull:      template.Must(template.New("home_full").Funcs(funcMap).Parse(layoutHeader + homeContentBody + layoutFooter)),
-		homePartial:   template.Must(template.New("home_partial").Funcs(funcMap).Parse(homeContentBody)),
-		docFull:       template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter)),
-		docPartial:    template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody)),
-		searchFull:    template.Must(template.New("search_full").Funcs(funcMap).Parse(layoutHeader + searchContentBody + layoutFooter)),
-		searchPartial: template.Must(template.New("search_partial").Funcs(funcMap).Parse(searchContentBody)),
-		searchResults: template.Must(template.New("search_results").Funcs(funcMap).Parse(searchResultsBody)),
-		notFoundFull:  template.Must(template.New("notfound").Funcs(funcMap).Parse(layoutHeader + notFoundBody + layoutFooter)),
+		homeFull:         template.Must(template.New("home_full").Funcs(funcMap).Parse(layoutHeader + homeContentBody + layoutFooter)),
+		homePartial:      template.Must(template.New("home_partial").Funcs(funcMap).Parse(homeContentBody)),
+		repoIndexFull:    template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter)),
+		repoIndexPartial: template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody)),
+		docFull:          template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter)),
+		docPartial:       template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody)),
+		searchFull:       template.Must(template.New("search_full").Funcs(funcMap).Parse(layoutHeader + searchContentBody + layoutFooter)),
+		searchPartial:    template.Must(template.New("search_partial").Funcs(funcMap).Parse(searchContentBody)),
+		searchResults:    template.Must(template.New("search_results").Funcs(funcMap).Parse(searchResultsBody)),
+		notFoundFull:     template.Must(template.New("notfound").Funcs(funcMap).Parse(layoutHeader + notFoundBody + layoutFooter)),
 	}
 }
 
@@ -53,6 +57,24 @@ func (v *Renderer) RenderHome(w io.Writer, repos []core.RepoInfo, partial bool) 
 	tmpl := v.homeFull
 	if partial {
 		tmpl = v.homePartial
+	}
+
+	return execTemplate(w, tmpl, data)
+}
+
+// repoIndexData is the data passed to the repo index page template.
+type repoIndexData struct {
+	Repo string
+	Docs []core.DocumentMeta
+}
+
+// RenderRepoIndex renders the repository index page with a list of documents.
+func (v *Renderer) RenderRepoIndex(w io.Writer, repo string, docs []core.DocumentMeta, partial bool) error {
+	data := repoIndexData{Repo: repo, Docs: docs}
+
+	tmpl := v.repoIndexFull
+	if partial {
+		tmpl = v.repoIndexPartial
 	}
 
 	return execTemplate(w, tmpl, data)

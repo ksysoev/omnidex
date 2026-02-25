@@ -42,6 +42,7 @@ type Service interface {
 // ViewRenderer defines the interface for rendering HTML views.
 type ViewRenderer interface {
 	RenderHome(w io.Writer, repos []core.RepoInfo, partial bool) error
+	RenderRepoIndex(w io.Writer, repo string, docs []core.DocumentMeta, partial bool) error
 	RenderDoc(w io.Writer, doc core.Document, html []byte, navDocs []core.DocumentMeta, partial bool) error
 	RenderSearch(w io.Writer, query string, results *core.SearchResults, partial bool) error
 	RenderNotFound(w io.Writer) error

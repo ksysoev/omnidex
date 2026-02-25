@@ -169,6 +169,55 @@ func (_c *MockViewRenderer_RenderNotFound_Call) RunAndReturn(run func(io.Writer)
 	return _c
 }
 
+// RenderRepoIndex provides a mock function with given fields: w, repo, docs, partial
+func (_m *MockViewRenderer) RenderRepoIndex(w io.Writer, repo string, docs []core.DocumentMeta, partial bool) error {
+	ret := _m.Called(w, repo, docs, partial)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RenderRepoIndex")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(io.Writer, string, []core.DocumentMeta, bool) error); ok {
+		r0 = rf(w, repo, docs, partial)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockViewRenderer_RenderRepoIndex_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RenderRepoIndex'
+type MockViewRenderer_RenderRepoIndex_Call struct {
+	*mock.Call
+}
+
+// RenderRepoIndex is a helper method to define mock.On call
+//   - w io.Writer
+//   - repo string
+//   - docs []core.DocumentMeta
+//   - partial bool
+func (_e *MockViewRenderer_Expecter) RenderRepoIndex(w interface{}, repo interface{}, docs interface{}, partial interface{}) *MockViewRenderer_RenderRepoIndex_Call {
+	return &MockViewRenderer_RenderRepoIndex_Call{Call: _e.mock.On("RenderRepoIndex", w, repo, docs, partial)}
+}
+
+func (_c *MockViewRenderer_RenderRepoIndex_Call) Run(run func(w io.Writer, repo string, docs []core.DocumentMeta, partial bool)) *MockViewRenderer_RenderRepoIndex_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(io.Writer), args[1].(string), args[2].([]core.DocumentMeta), args[3].(bool))
+	})
+	return _c
+}
+
+func (_c *MockViewRenderer_RenderRepoIndex_Call) Return(_a0 error) *MockViewRenderer_RenderRepoIndex_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockViewRenderer_RenderRepoIndex_Call) RunAndReturn(run func(io.Writer, string, []core.DocumentMeta, bool) error) *MockViewRenderer_RenderRepoIndex_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RenderSearch provides a mock function with given fields: w, query, results, partial
 func (_m *MockViewRenderer) RenderSearch(w io.Writer, query string, results *core.SearchResults, partial bool) error {
 	ret := _m.Called(w, query, results, partial)
