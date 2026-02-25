@@ -69,11 +69,6 @@ func TestRenderer_ToHTML(t *testing.T) {
 			input:    "Visit https://go.dev for more.",
 			contains: `<a href="https://go.dev"`,
 		},
-		{
-			name:     "GFM task list",
-			input:    "- [x] Done\n- [ ] Todo",
-			contains: "<li>",
-		},
 	}
 
 	for _, tt := range tests {
@@ -83,6 +78,21 @@ func TestRenderer_ToHTML(t *testing.T) {
 			assert.Contains(t, string(result), tt.contains)
 		})
 	}
+}
+
+func TestRenderer_ToHTML_TaskListSanitized(t *testing.T) {
+	r := New()
+
+	// GFM task lists produce <input type="checkbox"> elements, but
+	// bluemonday.UGCPolicy() strips them for security. Verify that
+	// the text content is preserved and checkboxes are removed.
+	result, err := r.ToHTML([]byte("- [x] Done\n- [ ] Todo"))
+	assert.NoError(t, err)
+
+	html := string(result)
+	assert.Contains(t, html, "Done")
+	assert.Contains(t, html, "Todo")
+	assert.NotContains(t, html, "<input")
 }
 
 func TestRenderer_ExtractTitle(t *testing.T) {
