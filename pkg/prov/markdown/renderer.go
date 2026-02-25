@@ -9,6 +9,8 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -21,7 +23,9 @@ type Renderer struct {
 
 // New creates a new Renderer with default goldmark configuration and HTML sanitization.
 func New() *Renderer {
-	md := goldmark.New()
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+	)
 	policy := bluemonday.UGCPolicy()
 
 	return &Renderer{md: md, sanitize: policy}
@@ -113,6 +117,18 @@ func (r *Renderer) ToPlainText(src []byte) string {
 		case *ast.Paragraph, *ast.Heading, *ast.ListItem:
 			if buf.Len() > 0 && buf.Bytes()[buf.Len()-1] != '\n' {
 				buf.WriteByte('\n')
+			}
+		case *east.Table:
+			if buf.Len() > 0 && buf.Bytes()[buf.Len()-1] != '\n' {
+				buf.WriteByte('\n')
+			}
+		case *east.TableRow, *east.TableHeader:
+			if buf.Len() > 0 && buf.Bytes()[buf.Len()-1] != '\n' {
+				buf.WriteByte('\n')
+			}
+		case *east.TableCell:
+			if node.PreviousSibling() != nil {
+				buf.WriteByte('\t')
 			}
 		}
 

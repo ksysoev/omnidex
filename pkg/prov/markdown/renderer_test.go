@@ -44,6 +44,31 @@ func TestRenderer_ToHTML(t *testing.T) {
 			input:    "[Go](https://go.dev)",
 			contains: `<a href="https://go.dev" rel="nofollow">Go</a>`,
 		},
+		{
+			name:     "GFM table",
+			input:    "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |",
+			contains: "<table>",
+		},
+		{
+			name:     "GFM table header cells",
+			input:    "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |",
+			contains: "<th>Header 1</th>",
+		},
+		{
+			name:     "GFM table data cells",
+			input:    "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |",
+			contains: "<td>Cell 1</td>",
+		},
+		{
+			name:     "GFM strikethrough",
+			input:    "This is ~~deleted~~ text.",
+			contains: "<del>deleted</del>",
+		},
+		{
+			name:     "GFM autolink",
+			input:    "Visit https://go.dev for more.",
+			contains: `<a href="https://go.dev"`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -53,6 +78,21 @@ func TestRenderer_ToHTML(t *testing.T) {
 			assert.Contains(t, string(result), tt.contains)
 		})
 	}
+}
+
+func TestRenderer_ToHTML_TaskListSanitized(t *testing.T) {
+	r := New()
+
+	// GFM task lists produce <input type="checkbox"> elements, but
+	// bluemonday.UGCPolicy() strips them for security. Verify that
+	// the text content is preserved and checkboxes are removed.
+	result, err := r.ToHTML([]byte("- [x] Done\n- [ ] Todo"))
+	assert.NoError(t, err)
+
+	html := string(result)
+	assert.Contains(t, html, "Done")
+	assert.Contains(t, html, "Todo")
+	assert.NotContains(t, html, "<input")
 }
 
 func TestRenderer_ExtractTitle(t *testing.T) {
@@ -158,6 +198,24 @@ func TestRenderer_ToPlainText(t *testing.T) {
 			input:    "```\nhello world\n```",
 			contains: "hello world",
 		},
+		{
+			name:     "preserves table cell text",
+			input:    "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |",
+			contains: "Header 1",
+			excludes: "|",
+		},
+		{
+			name:     "preserves all table cells",
+			input:    "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |",
+			contains: "Cell 2",
+			excludes: "---",
+		},
+		{
+			name:     "preserves strikethrough text",
+			input:    "This is ~~deleted~~ text.",
+			contains: "deleted",
+			excludes: "~~",
+		},
 	}
 
 	for _, tt := range tests {
@@ -188,6 +246,25 @@ func TestRenderer_ToPlainText_MultipleBlocks(t *testing.T) {
 	assert.Contains(t, result, "fmt.Println")
 	assert.NotContains(t, result, "**")
 	assert.NotContains(t, result, "```")
+}
+
+func TestRenderer_ToPlainText_Table(t *testing.T) {
+	r := New()
+
+	input := "# Title\n\n| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |\n\nAfter table."
+
+	result := r.ToPlainText([]byte(input))
+
+	assert.Contains(t, result, "Title")
+	assert.Contains(t, result, "Name")
+	assert.Contains(t, result, "Age")
+	assert.Contains(t, result, "Alice")
+	assert.Contains(t, result, "30")
+	assert.Contains(t, result, "Bob")
+	assert.Contains(t, result, "25")
+	assert.Contains(t, result, "After table.")
+	assert.NotContains(t, result, "|")
+	assert.NotContains(t, result, "---")
 }
 
 func TestRenderer_ExtractTitle_FormattedH1(t *testing.T) {

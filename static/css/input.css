@@ -19,5 +19,6 @@
 .prose table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
 .prose th, .prose td { border: 1px solid #e5e7eb; padding: 0.5em 0.75em; text-align: left; }
 .prose th { background-color: #f9fafb; font-weight: 600; }
+.prose del { text-decoration: line-through; color: #6b7280; }
 .prose img { max-width: 100%; border-radius: 0.5em; }
 .prose hr { border-top: 1px solid #e5e7eb; margin: 2em 0; }
