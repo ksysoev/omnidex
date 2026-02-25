@@ -4,9 +4,12 @@ package search
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/mapping"
+	bleveQuery "github.com/blevesearch/bleve/v2/search/query"
+
 	bleveSearch "github.com/blevesearch/bleve/v2/search"
 	"github.com/ksysoev/omnidex/pkg/core"
 )
@@ -71,7 +74,7 @@ func (e *BleveEngine) Search(_ context.Context, query string, opts core.SearchOp
 		opts.Limit = 20
 	}
 
-	q := bleve.NewQueryStringQuery(query)
+	q := buildSearchQuery(query)
 	req := bleve.NewSearchRequestOptions(q, opts.Limit, opts.Offset, false)
 	req.Highlight = bleve.NewHighlight()
 	req.Fields = []string{"repo", "path", "title"}
@@ -129,6 +132,170 @@ func (e *BleveEngine) DocCount() (uint64, error) {
 	}
 
 	return count, nil
+}
+
+// minFuzzyTermLength is the minimum term length required to apply fuzzy matching.
+// Shorter terms produce too many false-positive matches.
+const minFuzzyTermLength = 4
+
+// longTermThreshold is the term length at which fuzzy matching uses a higher edit distance.
+const longTermThreshold = 7
+
+// queryTerm represents a single parsed search term.
+type queryTerm struct {
+	text   string
+	phrase bool // true when the term was enclosed in double quotes
+}
+
+// splitQueryTerms parses user input into individual search terms.
+// Double-quoted substrings are treated as phrase terms; unquoted words are split on whitespace.
+func splitQueryTerms(input string) []queryTerm {
+	var terms []queryTerm
+
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return terms
+	}
+
+	i := 0
+	for i < len(input) {
+		// Skip whitespace.
+		if input[i] == ' ' || input[i] == '\t' {
+			i++
+			continue
+		}
+
+		// Handle quoted phrase.
+		if input[i] == '"' {
+			end := strings.IndexByte(input[i+1:], '"')
+			if end == -1 {
+				// No closing quote -- treat the rest as a single phrase.
+				phrase := strings.TrimSpace(input[i+1:])
+				if phrase != "" {
+					terms = append(terms, queryTerm{text: phrase, phrase: true})
+				}
+
+				break
+			}
+
+			phrase := strings.TrimSpace(input[i+1 : i+1+end])
+			if phrase != "" {
+				terms = append(terms, queryTerm{text: phrase, phrase: true})
+			}
+
+			i += end + 2 // skip past closing quote
+
+			continue
+		}
+
+		// Handle unquoted word.
+		end := strings.IndexAny(input[i:], " \t")
+		if end == -1 {
+			terms = append(terms, queryTerm{text: input[i:]})
+
+			break
+		}
+
+		terms = append(terms, queryTerm{text: input[i : i+end]})
+		i += end
+	}
+
+	return terms
+}
+
+// buildSearchQuery constructs a hybrid Bleve query from user input.
+// For each term it creates a disjunction of match, prefix, and fuzzy queries
+// targeting both title and content fields with appropriate boost values.
+// Multiple terms are combined with a conjunction so all terms must match.
+func buildSearchQuery(userQuery string) bleveQuery.Query {
+	terms := splitQueryTerms(userQuery)
+	if len(terms) == 0 {
+		return bleve.NewMatchNoneQuery()
+	}
+
+	termQueries := make([]bleveQuery.Query, 0, len(terms))
+
+	for _, term := range terms {
+		var disj bleveQuery.Query
+		if term.phrase {
+			disj = buildPhraseQueries(term.text)
+		} else {
+			disj = buildTermQueries(term.text)
+		}
+
+		termQueries = append(termQueries, disj)
+	}
+
+	if len(termQueries) == 1 {
+		return termQueries[0]
+	}
+
+	return bleve.NewConjunctionQuery(termQueries...)
+}
+
+// buildPhraseQueries creates a disjunction of MatchPhraseQuery for title and content fields.
+func buildPhraseQueries(phrase string) bleveQuery.Query {
+	titleQ := bleve.NewMatchPhraseQuery(phrase)
+	titleQ.SetField("title")
+	titleQ.SetBoost(10.0)
+
+	contentQ := bleve.NewMatchPhraseQuery(phrase)
+	contentQ.SetField("content")
+	contentQ.SetBoost(5.0)
+
+	return bleve.NewDisjunctionQuery(titleQ, contentQ)
+}
+
+// buildTermQueries creates a disjunction of match, prefix, and fuzzy queries
+// for a single non-phrase term, targeting both title and content fields.
+func buildTermQueries(term string) bleveQuery.Query {
+	subQueries := make([]bleveQuery.Query, 0, 6) //nolint:mnd // up to 6 sub-queries: match, prefix, fuzzy for title and content
+
+	// Exact/analyzed match -- highest priority.
+	titleMatch := bleve.NewMatchQuery(term)
+	titleMatch.SetField("title")
+	titleMatch.SetBoost(6.0)
+
+	contentMatch := bleve.NewMatchQuery(term)
+	contentMatch.SetField("content")
+	contentMatch.SetBoost(3.0)
+
+	subQueries = append(subQueries, titleMatch, contentMatch)
+
+	// Prefix match -- medium priority.
+	lowered := strings.ToLower(term)
+
+	titlePrefix := bleve.NewPrefixQuery(lowered)
+	titlePrefix.SetField("title")
+	titlePrefix.SetBoost(3.0)
+
+	contentPrefix := bleve.NewPrefixQuery(lowered)
+	contentPrefix.SetField("content")
+	contentPrefix.SetBoost(1.5)
+
+	subQueries = append(subQueries, titlePrefix, contentPrefix)
+
+	// Fuzzy match -- lowest priority (only for terms long enough to avoid noise).
+	if len(term) >= minFuzzyTermLength {
+		fuzziness := 1
+		if len(term) >= longTermThreshold {
+			fuzziness = 2
+		}
+
+		titleFuzzy := bleve.NewFuzzyQuery(lowered)
+		titleFuzzy.SetField("title")
+		titleFuzzy.SetFuzziness(fuzziness)
+		titleFuzzy.SetBoost(1.0)
+
+		contentFuzzy := bleve.NewFuzzyQuery(lowered)
+		contentFuzzy.SetField("content")
+		contentFuzzy.SetFuzziness(fuzziness)
+		contentFuzzy.SetBoost(0.5)
+
+		subQueries = append(subQueries, titleFuzzy, contentFuzzy)
+	}
+
+	return bleve.NewDisjunctionQuery(subQueries...)
 }
 
 func buildIndexMapping() mapping.IndexMapping {
