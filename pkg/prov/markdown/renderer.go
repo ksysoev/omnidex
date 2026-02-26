@@ -16,6 +16,9 @@ import (
 	gmm "go.abhg.dev/goldmark/mermaid"
 )
 
+// mermaidClassPattern matches the exact "mermaid" class value for bluemonday sanitization policy.
+var mermaidClassPattern = regexp.MustCompile(`^mermaid$`)
+
 // Renderer converts markdown content to HTML, extracts titles, and strips markdown to plain text.
 // HTML output is sanitized using bluemonday to prevent XSS attacks from user-submitted markdown.
 type Renderer struct {
@@ -36,7 +39,7 @@ func New() *Renderer {
 	)
 
 	policy := bluemonday.UGCPolicy()
-	policy.AllowAttrs("class").Matching(regexp.MustCompile(`^mermaid$`)).OnElements("pre")
+	policy.AllowAttrs("class").Matching(mermaidClassPattern).OnElements("pre")
 
 	return &Renderer{md: md, sanitize: policy}
 }

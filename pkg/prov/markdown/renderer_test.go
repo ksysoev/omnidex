@@ -352,8 +352,13 @@ func TestRenderer_ToHTML_MermaidComplexSyntaxSurvivesSanitization(t *testing.T) 
 	html := string(result)
 	// Ensure the mermaid block wrapper is preserved.
 	assert.Contains(t, html, `<pre class="mermaid">`)
-	// Ensure complex mermaid syntax with HTML-like characters survives sanitization.
-	assert.Contains(t, html, `A[&#34;Label with &lt;b&gt;HTML&lt;/b&gt; &amp; more&#34;]--&gt;B;`)
+	// Ensure complex mermaid syntax with HTML-like characters survives sanitization
+	// without depending on the exact HTML entity used for quotes.
+	assert.Contains(t, html, `A[`)
+	assert.Contains(t, html, `Label with`)
+	assert.Contains(t, html, `&lt;b&gt;HTML&lt;/b&gt;`)
+	assert.Contains(t, html, `&amp; more`)
+	assert.Contains(t, html, `]--&gt;B;`)
 }
 
 func TestRenderer_ToPlainText_NonMermaidCodePreserved(t *testing.T) {
