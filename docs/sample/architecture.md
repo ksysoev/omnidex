@@ -4,29 +4,22 @@ Omnidex follows a clean architecture with clear separation of concerns. The appl
 
 ## System Architecture
 
-```
-GitHub Action (action/)
-    |
-    | POST /api/v1/docs (Bearer auth)
-    v
-+--- API Server (pkg/api) ---+
-|  middleware: reqID, auth    |
-|                             |
-|  Ingest API (JSON)          |  Portal (HTML + HTMX)
-|  POST /api/v1/docs          |  GET / (home)
-|  GET  /api/v1/repos         |  GET /docs/{owner}/{repo}/{path}
-|                             |  GET /search?q=...
-+-------|---------|----------+
-        |         |
-        v         v
-     Service (pkg/core)
-     |       |         |
-     v       v         v
-  DocStore  Search   Markdown
-  (repo/)   (repo/)  (prov/)
-     |         |
-     v         v
-  Filesystem  Bleve Index
+```mermaid
+graph TD
+    GHA["GitHub Action (action/)"] -->|"POST /api/v1/docs (Bearer auth)"| API
+
+    subgraph API["API Server (pkg/api)"]
+        MW["Middleware: reqID, auth"]
+        Ingest["Ingest API (JSON)<br/>POST /api/v1/docs<br/>GET /api/v1/repos"]
+        Portal["Portal (HTML + HTMX)<br/>GET / (home)<br/>GET /docs/{owner}/{repo}/{path}<br/>GET /search?q=..."]
+    end
+
+    API --> SVC["Service (pkg/core)"]
+    SVC --> DocStore["DocStore (repo/)"]
+    SVC --> Search["Search (repo/)"]
+    SVC --> Markdown["Markdown (prov/)"]
+    DocStore --> FS["Filesystem"]
+    Search --> Bleve["Bleve Index"]
 ```
 
 ## Package Layout
@@ -42,6 +35,56 @@ GitHub Action (action/)
 | **markdown** | `pkg/prov/markdown/` | Markdown rendering and processing |
 | **views** | `pkg/views/` | HTML template rendering for the portal |
 | **action** | `action/` | GitHub Action for publishing docs |
+
+## Request Flows
+
+### Document Ingestion
+
+```mermaid
+sequenceDiagram
+    participant GHA as GitHub Action
+    participant API as API Server
+    participant Core as Service
+    participant DS as DocStore
+    participant SE as Search Engine
+    participant MD as Markdown Renderer
+
+    GHA->>API: POST /api/v1/docs (Bearer auth)
+    API->>Core: IngestDocuments(request)
+    loop For each document
+        Core->>MD: ExtractTitle(content)
+        MD-->>Core: title
+        Core->>MD: ToPlainText(content)
+        MD-->>Core: plain text
+        Core->>DS: Upsert(document)
+        Core->>SE: Index(document, plainText)
+    end
+    Core-->>API: indexed count
+    API-->>GHA: 200 OK
+```
+
+### Document Viewing
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant API as API Server
+    participant Core as Service
+    participant DS as DocStore
+    participant MD as Markdown Renderer
+    participant Views as View Renderer
+
+    Browser->>API: GET /docs/owner/repo/path
+    API->>Core: GetDocument(owner, repo, path)
+    Core->>DS: Get(owner, repo, path)
+    DS-->>Core: document (raw markdown)
+    Core->>MD: ToHTML(content)
+    MD-->>Core: sanitized HTML
+    Core-->>API: document + HTML
+    API->>Views: RenderDoc(doc, html, navDocs)
+    Views-->>API: HTML page
+    API-->>Browser: HTML response
+```
 
 ## Key Design Decisions
 

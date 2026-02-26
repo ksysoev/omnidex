@@ -299,3 +299,57 @@ func TestRenderer_ExtractTitle_FormattedH1(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderer_ToHTML_MermaidBlock(t *testing.T) {
+	r := New()
+
+	input := "```mermaid\ngraph TD;\n    A-->B;\n```"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	assert.Contains(t, html, `<pre class="mermaid">`)
+	assert.Contains(t, html, "A--&gt;B;")
+	assert.NotContains(t, html, "<code")
+}
+
+func TestRenderer_ToHTML_MermaidClassSurvivesSanitization(t *testing.T) {
+	r := New()
+
+	input := "```mermaid\ngraph LR;\n    Start-->End;\n```"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	// The class="mermaid" attribute must survive bluemonday sanitization.
+	assert.Contains(t, html, `class="mermaid"`)
+}
+
+func TestRenderer_ToPlainText_MermaidExcluded(t *testing.T) {
+	r := New()
+
+	input := "# Title\n\nSome text.\n\n```mermaid\ngraph TD;\n    A-->B;\n    C-->D;\n```\n\nAfter diagram."
+
+	result := r.ToPlainText([]byte(input))
+
+	assert.Contains(t, result, "Title")
+	assert.Contains(t, result, "Some text.")
+	assert.Contains(t, result, "After diagram.")
+	assert.NotContains(t, result, "graph TD")
+	assert.NotContains(t, result, "A-->B")
+}
+
+func TestRenderer_ToPlainText_NonMermaidCodePreserved(t *testing.T) {
+	r := New()
+
+	input := "```go\nfmt.Println(\"hello\")\n```\n\n```mermaid\ngraph TD;\n    A-->B;\n```"
+
+	result := r.ToPlainText([]byte(input))
+
+	// Regular code blocks should still be indexed.
+	assert.Contains(t, result, "fmt.Println")
+	// Mermaid blocks should be excluded.
+	assert.NotContains(t, result, "graph TD")
+}

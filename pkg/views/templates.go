@@ -8,7 +8,14 @@ const layoutHeader = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Omnidex - Documentation Portal</title>
     <script src="/static/js/htmx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        mermaid.initialize({startOnLoad: true});
+        document.addEventListener('htmx:afterSwap', function() {
+            if (typeof mermaid !== 'undefined') { mermaid.run(); }
+        });
+    </script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <nav class="bg-white border-b border-gray-200 px-6 py-3">

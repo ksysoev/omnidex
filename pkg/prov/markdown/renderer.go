@@ -4,6 +4,7 @@ package markdown
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -12,6 +13,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+	gmm "go.abhg.dev/goldmark/mermaid"
 )
 
 // Renderer converts markdown content to HTML, extracts titles, and strips markdown to plain text.
@@ -24,9 +26,17 @@ type Renderer struct {
 // New creates a new Renderer with default goldmark configuration and HTML sanitization.
 func New() *Renderer {
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithExtensions(
+			extension.GFM,
+			&gmm.Extender{
+				RenderMode: gmm.RenderModeClient,
+				NoScript:   true,
+			},
+		),
 	)
+
 	policy := bluemonday.UGCPolicy()
+	policy.AllowAttrs("class").Matching(regexp.MustCompile(`^mermaid$`)).OnElements("pre")
 
 	return &Renderer{md: md, sanitize: policy}
 }
@@ -107,6 +117,10 @@ func (r *Renderer) ToPlainText(src []byte) string {
 
 			return ast.WalkSkipChildren, nil
 		case *ast.FencedCodeBlock:
+			if lang := node.Language(src); len(lang) > 0 && string(lang) == "mermaid" {
+				return ast.WalkSkipChildren, nil
+			}
+
 			lines := node.Lines()
 			for i := range lines.Len() {
 				line := lines.At(i)
