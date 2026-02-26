@@ -8,12 +8,16 @@ const layoutHeader = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Omnidex - Documentation Portal</title>
     <script src="/static/js/htmx.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.12.3/dist/mermaid.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <script>
-        mermaid.initialize({startOnLoad: true});
-        document.addEventListener('htmx:afterSwap', function() {
-            if (typeof mermaid !== 'undefined') { mermaid.run(); }
+        if (typeof mermaid !== 'undefined') { mermaid.initialize({startOnLoad: true}); }
+        document.addEventListener('htmx:afterSwap', function(event) {
+            if (typeof mermaid !== 'undefined') {
+                var target = event.detail.elt;
+                var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
+                if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}); }
+            }
         });
     </script>
 </head>

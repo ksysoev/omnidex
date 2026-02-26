@@ -341,6 +341,21 @@ func TestRenderer_ToPlainText_MermaidExcluded(t *testing.T) {
 	assert.NotContains(t, result, "A-->B")
 }
 
+func TestRenderer_ToHTML_MermaidComplexSyntaxSurvivesSanitization(t *testing.T) {
+	r := New()
+
+	input := "```mermaid\ngraph TD;\n    A[\"Label with <b>HTML</b> & more\"]-->B;\n```"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	// Ensure the mermaid block wrapper is preserved.
+	assert.Contains(t, html, `<pre class="mermaid">`)
+	// Ensure complex mermaid syntax with HTML-like characters survives sanitization.
+	assert.Contains(t, html, `A[&#34;Label with &lt;b&gt;HTML&lt;/b&gt; &amp; more&#34;]--&gt;B;`)
+}
+
 func TestRenderer_ToPlainText_NonMermaidCodePreserved(t *testing.T) {
 	r := New()
 
