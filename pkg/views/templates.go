@@ -16,7 +16,7 @@ const layoutHeader = `<!DOCTYPE html>
             if (typeof mermaid !== 'undefined') {
                 var target = event.detail.elt;
                 var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
-                if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}); }
+                if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}).catch(function(e) { console.error('Mermaid rendering failed:', e); }); }
             }
         });
     </script>
