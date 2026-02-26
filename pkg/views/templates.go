@@ -82,7 +82,7 @@ const docContentBody = `
         <div class="mb-4 text-sm text-gray-500">
             <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
             <span class="mx-1">/</span>
-            <span>{{.Doc.Repo}}</span>
+            <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
             <span class="mx-1">/</span>
             <span>{{.Doc.Path}}</span>
         </div>
