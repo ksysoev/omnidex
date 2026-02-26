@@ -8,7 +8,18 @@ const layoutHeader = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Omnidex - Documentation Portal</title>
     <script src="/static/js/htmx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.12.3/dist/mermaid.min.js" integrity="sha384-jFhLSLFn4m565eRAS0CDMWubMqOtfZWWbE8kqgGdU+VHbJ3B2G/4X8u+0BM8MtdU" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        if (typeof mermaid !== 'undefined') { mermaid.initialize({startOnLoad: true}); }
+        document.addEventListener('htmx:afterSwap', function(event) {
+            if (typeof mermaid !== 'undefined') {
+                var target = event.detail.elt;
+                var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
+                if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}).catch(function(e) { console.error('Mermaid rendering failed:', e); }); }
+            }
+        });
+    </script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
     <nav class="bg-white border-b border-gray-200 px-6 py-3">
