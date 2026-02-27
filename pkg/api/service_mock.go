@@ -25,7 +25,7 @@ func (_m *MockService) EXPECT() *MockService_Expecter {
 }
 
 // GetDocument provides a mock function with given fields: ctx, repo, path
-func (_m *MockService) GetDocument(ctx context.Context, repo string, path string) (core.Document, []byte, error) {
+func (_m *MockService) GetDocument(ctx context.Context, repo string, path string) (core.Document, []byte, []core.Heading, error) {
 	ret := _m.Called(ctx, repo, path)
 
 	if len(ret) == 0 {
@@ -34,8 +34,9 @@ func (_m *MockService) GetDocument(ctx context.Context, repo string, path string
 
 	var r0 core.Document
 	var r1 []byte
-	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) (core.Document, []byte, error)); ok {
+	var r2 []core.Heading
+	var r3 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (core.Document, []byte, []core.Heading, error)); ok {
 		return rf(ctx, repo, path)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string, string) core.Document); ok {
@@ -52,13 +53,21 @@ func (_m *MockService) GetDocument(ctx context.Context, repo string, path string
 		}
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, string, string) error); ok {
+	if rf, ok := ret.Get(2).(func(context.Context, string, string) []core.Heading); ok {
 		r2 = rf(ctx, repo, path)
 	} else {
-		r2 = ret.Error(2)
+		if ret.Get(2) != nil {
+			r2 = ret.Get(2).([]core.Heading)
+		}
 	}
 
-	return r0, r1, r2
+	if rf, ok := ret.Get(3).(func(context.Context, string, string) error); ok {
+		r3 = rf(ctx, repo, path)
+	} else {
+		r3 = ret.Error(3)
+	}
+
+	return r0, r1, r2, r3
 }
 
 // MockService_GetDocument_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDocument'
@@ -81,12 +90,12 @@ func (_c *MockService_GetDocument_Call) Run(run func(ctx context.Context, repo s
 	return _c
 }
 
-func (_c *MockService_GetDocument_Call) Return(_a0 core.Document, _a1 []byte, _a2 error) *MockService_GetDocument_Call {
-	_c.Call.Return(_a0, _a1, _a2)
+func (_c *MockService_GetDocument_Call) Return(_a0 core.Document, _a1 []byte, _a2 []core.Heading, _a3 error) *MockService_GetDocument_Call {
+	_c.Call.Return(_a0, _a1, _a2, _a3)
 	return _c
 }
 
-func (_c *MockService_GetDocument_Call) RunAndReturn(run func(context.Context, string, string) (core.Document, []byte, error)) *MockService_GetDocument_Call {
+func (_c *MockService_GetDocument_Call) RunAndReturn(run func(context.Context, string, string) (core.Document, []byte, []core.Heading, error)) *MockService_GetDocument_Call {
 	_c.Call.Return(run)
 	return _c
 }

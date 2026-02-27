@@ -12,12 +12,65 @@ const layoutHeader = `<!DOCTYPE html>
     <link rel="stylesheet" href="/static/css/style.css">
     <script>
         if (typeof mermaid !== 'undefined') { mermaid.initialize({startOnLoad: true}); }
+        function initScrollSpy() {
+            if (window._tocObserver) {
+                window._tocObserver.disconnect();
+                window._tocObserver = null;
+            }
+            window._tocActiveId = null;
+            window._tocHeadingStates = {};
+            if (!('IntersectionObserver' in window)) return;
+            var links = document.querySelectorAll('[data-toc-link]');
+            if (!links.length) return;
+            var content = document.getElementById('doc-content');
+            if (!content) return;
+            var headings = content.querySelectorAll('.prose h1[id], .prose h2[id], .prose h3[id]');
+            if (!headings.length) return;
+            window._tocObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.target.id) {
+                        window._tocHeadingStates[entry.target.id] = entry.isIntersecting;
+                    }
+                });
+                var activeId = null;
+                for (var i = 0; i < headings.length; i++) {
+                    if (window._tocHeadingStates[headings[i].id]) {
+                        activeId = headings[i].id;
+                        break;
+                    }
+                }
+                if (!activeId || window._tocActiveId === activeId) return;
+                window._tocActiveId = activeId;
+                links.forEach(function(l) { l.classList.remove('toc-active'); });
+                var escapedId = (window.CSS && window.CSS.escape) ? window.CSS.escape(activeId) : activeId;
+                var active = document.querySelector('[data-toc-link="' + escapedId + '"]');
+                if (active) { active.classList.add('toc-active'); }
+            }, { rootMargin: '0px 0px -80% 0px', threshold: 0 });
+            headings.forEach(function(h) {
+                window._tocObserver.observe(h);
+            });
+            var hash = window.location.hash;
+            if (hash && hash.charAt(0) === '#') {
+                var id = hash.slice(1);
+                try { id = decodeURIComponent(id); } catch (e) { /* use raw id */ }
+                var target = document.getElementById(id);
+                if (target) {
+                    var scrollBehavior = 'smooth';
+                    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                        scrollBehavior = 'auto';
+                    }
+                    target.scrollIntoView({behavior: scrollBehavior});
+                }
+            }
+        }
+        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); });
         document.addEventListener('htmx:afterSwap', function(event) {
             if (typeof mermaid !== 'undefined') {
                 var target = event.detail.elt;
                 var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
                 if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}).catch(function(e) { console.error('Mermaid rendering failed:', e); }); }
             }
+            initScrollSpy();
         });
     </script>
 </head>
@@ -89,7 +142,7 @@ const docContentBody = `
             </ul>
         </nav>
     </aside>
-    <article class="flex-1 min-w-0">
+    <article id="doc-content" class="flex-1 min-w-0">
         <div class="mb-4 text-sm text-gray-500">
             <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
             <span class="mx-1">/</span>
@@ -101,6 +154,23 @@ const docContentBody = `
             {{html .HTML}}
         </div>
     </article>
+    {{if gt (len .Headings) 1}}
+    <aside class="w-56 flex-shrink-0 hidden lg:block">
+        <nav class="sticky top-8">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">On this page</h3>
+            <ul class="space-y-1 border-l border-gray-200">
+                {{range .Headings}}
+                <li>
+                    <a href="#{{.ID}}" data-toc-link="{{.ID}}"
+                       class="toc-link block py-1 text-sm text-gray-500 hover:text-gray-900 border-l-2 border-transparent hover:border-gray-400 -ml-px {{tocIndent .Level}}">
+                        {{.Text}}
+                    </a>
+                </li>
+                {{end}}
+            </ul>
+        </nav>
+    </aside>
+    {{end}}
 </div>`
 
 // searchContentBody is the search page content template.

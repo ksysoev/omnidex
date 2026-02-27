@@ -7,11 +7,13 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ksysoev/omnidex/pkg/core"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	gmm "go.abhg.dev/goldmark/mermaid"
 )
@@ -29,6 +31,9 @@ type Renderer struct {
 // New creates a new Renderer with default goldmark configuration and HTML sanitization.
 func New() *Renderer {
 	md := goldmark.New(
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
 		goldmark.WithExtensions(
 			extension.GFM,
 			&gmm.Extender{
@@ -40,6 +45,7 @@ func New() *Renderer {
 
 	policy := bluemonday.UGCPolicy()
 	policy.AllowAttrs("class").Matching(mermaidClassPattern).OnElements("pre")
+	policy.AllowAttrs("id").OnElements("h1", "h2", "h3", "h4", "h5", "h6")
 
 	return &Renderer{md: md, sanitize: policy}
 }
@@ -56,6 +62,30 @@ func (r *Renderer) ToHTML(src []byte) ([]byte, error) {
 	sanitized := r.sanitize.SanitizeBytes(buf.Bytes())
 
 	return sanitized, nil
+}
+
+// extractNodeText recursively walks a node's subtree and collects all plain text
+// content, handling inline formatting such as emphasis, strong, links, and code spans.
+func extractNodeText(n ast.Node, src []byte) string {
+	var buf bytes.Buffer
+
+	_ = ast.Walk(n, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		if child == n {
+			return ast.WalkContinue, nil
+		}
+
+		if textNode, ok := child.(*ast.Text); ok {
+			buf.Write(textNode.Segment.Value(src))
+		}
+
+		return ast.WalkContinue, nil
+	})
+
+	return buf.String()
 }
 
 // ExtractTitle extracts the title from the first H1 heading in the markdown content.
@@ -76,15 +106,7 @@ func (r *Renderer) ExtractTitle(src []byte) string {
 			return ast.WalkContinue, nil
 		}
 
-		var buf bytes.Buffer
-
-		for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
-			if textNode, ok := child.(*ast.Text); ok {
-				buf.Write(textNode.Segment.Value(src))
-			}
-		}
-
-		title = buf.String()
+		title = extractNodeText(heading, src)
 
 		return ast.WalkStop, nil
 	})
@@ -153,4 +175,70 @@ func (r *Renderer) ToPlainText(src []byte) string {
 	})
 
 	return strings.TrimSpace(buf.String())
+}
+
+// ToHTMLWithHeadings parses the markdown source once, extracts H1-H3 headings from
+// the AST for table of contents rendering, then renders the AST to sanitized HTML.
+// This avoids the cost of parsing the same source twice compared to calling ToHTML
+// and ExtractHeadings separately.
+func (r *Renderer) ToHTMLWithHeadings(src []byte) ([]byte, []core.Heading, error) {
+	reader := text.NewReader(src)
+	doc := r.md.Parser().Parse(reader)
+
+	headings := collectHeadings(doc, src)
+
+	var buf bytes.Buffer
+	if err := r.md.Renderer().Render(&buf, src, doc); err != nil {
+		return nil, nil, fmt.Errorf("failed to render markdown to HTML: %w", err)
+	}
+
+	sanitized := r.sanitize.SanitizeBytes(buf.Bytes())
+
+	return sanitized, headings, nil
+}
+
+// ExtractHeadings walks the Goldmark AST and extracts H1-H3 headings with their
+// auto-generated IDs and text content, suitable for table of contents rendering.
+func (r *Renderer) ExtractHeadings(src []byte) []core.Heading {
+	reader := text.NewReader(src)
+	doc := r.md.Parser().Parse(reader)
+
+	return collectHeadings(doc, src)
+}
+
+// collectHeadings walks a parsed AST and extracts H1-H3 headings with their
+// auto-generated IDs and text content.
+func collectHeadings(doc ast.Node, src []byte) []core.Heading {
+	var headings []core.Heading
+
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		heading, ok := n.(*ast.Heading)
+		if !ok || heading.Level > 3 {
+			return ast.WalkContinue, nil
+		}
+
+		idAttr, ok := heading.AttributeString("id")
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		idBytes, ok := idAttr.([]byte)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		headings = append(headings, core.Heading{
+			Level: heading.Level,
+			ID:    string(idBytes),
+			Text:  extractNodeText(heading, src),
+		})
+
+		return ast.WalkContinue, nil
+	})
+
+	return headings
 }

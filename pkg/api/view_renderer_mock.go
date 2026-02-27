@@ -25,17 +25,17 @@ func (_m *MockViewRenderer) EXPECT() *MockViewRenderer_Expecter {
 	return &MockViewRenderer_Expecter{mock: &_m.Mock}
 }
 
-// RenderDoc provides a mock function with given fields: w, doc, html, navDocs, partial
-func (_m *MockViewRenderer) RenderDoc(w io.Writer, doc core.Document, html []byte, navDocs []core.DocumentMeta, partial bool) error {
-	ret := _m.Called(w, doc, html, navDocs, partial)
+// RenderDoc provides a mock function with given fields: w, doc, html, headings, navDocs, partial
+func (_m *MockViewRenderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error {
+	ret := _m.Called(w, doc, html, headings, navDocs, partial)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RenderDoc")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(io.Writer, core.Document, []byte, []core.DocumentMeta, bool) error); ok {
-		r0 = rf(w, doc, html, navDocs, partial)
+	if rf, ok := ret.Get(0).(func(io.Writer, core.Document, []byte, []core.Heading, []core.DocumentMeta, bool) error); ok {
+		r0 = rf(w, doc, html, headings, navDocs, partial)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -52,15 +52,16 @@ type MockViewRenderer_RenderDoc_Call struct {
 //   - w io.Writer
 //   - doc core.Document
 //   - html []byte
+//   - headings []core.Heading
 //   - navDocs []core.DocumentMeta
 //   - partial bool
-func (_e *MockViewRenderer_Expecter) RenderDoc(w interface{}, doc interface{}, html interface{}, navDocs interface{}, partial interface{}) *MockViewRenderer_RenderDoc_Call {
-	return &MockViewRenderer_RenderDoc_Call{Call: _e.mock.On("RenderDoc", w, doc, html, navDocs, partial)}
+func (_e *MockViewRenderer_Expecter) RenderDoc(w interface{}, doc interface{}, html interface{}, headings interface{}, navDocs interface{}, partial interface{}) *MockViewRenderer_RenderDoc_Call {
+	return &MockViewRenderer_RenderDoc_Call{Call: _e.mock.On("RenderDoc", w, doc, html, headings, navDocs, partial)}
 }
 
-func (_c *MockViewRenderer_RenderDoc_Call) Run(run func(w io.Writer, doc core.Document, html []byte, navDocs []core.DocumentMeta, partial bool)) *MockViewRenderer_RenderDoc_Call {
+func (_c *MockViewRenderer_RenderDoc_Call) Run(run func(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool)) *MockViewRenderer_RenderDoc_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(io.Writer), args[1].(core.Document), args[2].([]byte), args[3].([]core.DocumentMeta), args[4].(bool))
+		run(args[0].(io.Writer), args[1].(core.Document), args[2].([]byte), args[3].([]core.Heading), args[4].([]core.DocumentMeta), args[5].(bool))
 	})
 	return _c
 }
@@ -70,7 +71,7 @@ func (_c *MockViewRenderer_RenderDoc_Call) Return(_a0 error) *MockViewRenderer_R
 	return _c
 }
 
-func (_c *MockViewRenderer_RenderDoc_Call) RunAndReturn(run func(io.Writer, core.Document, []byte, []core.DocumentMeta, bool) error) *MockViewRenderer_RenderDoc_Call {
+func (_c *MockViewRenderer_RenderDoc_Call) RunAndReturn(run func(io.Writer, core.Document, []byte, []core.Heading, []core.DocumentMeta, bool) error) *MockViewRenderer_RenderDoc_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -72,3 +72,10 @@ type IngestResponse struct {
 	Indexed int `json:"indexed"`
 	Deleted int `json:"deleted"`
 }
+
+// Heading represents a heading extracted from a document for table of contents navigation.
+type Heading struct {
+	ID    string
+	Text  string
+	Level int
+}

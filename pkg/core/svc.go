@@ -24,9 +24,9 @@ type searchEngine interface {
 	Search(ctx context.Context, query string, opts SearchOpts) (*SearchResults, error)
 }
 
-// markdownRenderer defines the interface for markdown processing.
+// markdownRenderer defines the interface for markdown processing used by Service.
 type markdownRenderer interface {
-	ToHTML(src []byte) ([]byte, error)
+	ToHTMLWithHeadings(src []byte) ([]byte, []Heading, error)
 	ExtractTitle(src []byte) string
 	ToPlainText(src []byte) string
 }
@@ -126,18 +126,19 @@ func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, 
 }
 
 // GetDocument retrieves a document and renders its markdown content to HTML.
-func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document, []byte, error) {
+// It also extracts headings from the markdown source for table of contents navigation.
+func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document, []byte, []Heading, error) {
 	doc, err := s.store.Get(ctx, repo, path)
 	if err != nil {
-		return Document{}, nil, fmt.Errorf("failed to get document: %w", err)
+		return Document{}, nil, nil, fmt.Errorf("failed to get document: %w", err)
 	}
 
-	html, err := s.renderer.ToHTML([]byte(doc.Content))
+	html, headings, err := s.renderer.ToHTMLWithHeadings([]byte(doc.Content))
 	if err != nil {
-		return Document{}, nil, fmt.Errorf("failed to render document: %w", err)
+		return Document{}, nil, nil, fmt.Errorf("failed to render document: %w", err)
 	}
 
-	return doc, html, nil
+	return doc, html, headings, nil
 }
 
 // SearchDocs performs a full-text search across all indexed documents.
