@@ -272,9 +272,9 @@ func TestDocPage_Success(t *testing.T) {
 		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README"},
 	}
 
-	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, nil)
+	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, []core.Heading(nil), nil)
 	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(navDocs, nil)
-	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, navDocs, false).Return(nil)
+	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, []core.Heading(nil), navDocs, false).Return(nil)
 
 	api := &API{svc: svc, views: views}
 
@@ -296,7 +296,7 @@ func TestDocPage_NotFound(t *testing.T) {
 	views := NewMockViewRenderer(t)
 
 	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/missing.md").
-		Return(core.Document{}, nil, fmt.Errorf("failed to get document: %w", docstore.ErrNotFound))
+		Return(core.Document{}, nil, nil, fmt.Errorf("failed to get document: %w", docstore.ErrNotFound))
 
 	api := &API{svc: svc, views: views}
 
@@ -417,7 +417,7 @@ func TestDocPage_ServiceInternalError(t *testing.T) {
 	views := NewMockViewRenderer(t)
 
 	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").
-		Return(core.Document{}, nil, fmt.Errorf("database connection lost"))
+		Return(core.Document{}, nil, nil, fmt.Errorf("database connection lost"))
 
 	api := &API{svc: svc, views: views}
 
@@ -449,10 +449,10 @@ func TestDocPage_ListDocumentsError(t *testing.T) {
 	}
 	htmlContent := []byte("<h1>README</h1>")
 
-	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, nil)
+	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, []core.Heading(nil), nil)
 	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(nil, fmt.Errorf("nav list error"))
 	// When ListDocuments fails, docs will be nil but page still renders.
-	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, []core.DocumentMeta(nil), false).Return(nil)
+	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, []core.Heading(nil), []core.DocumentMeta(nil), false).Return(nil)
 
 	api := &API{svc: svc, views: views}
 
@@ -487,9 +487,9 @@ func TestDocPage_HTMXPartial(t *testing.T) {
 		{ID: "owner/repo/docs/readme.md", Repo: "owner/repo", Path: "docs/readme.md", Title: "README"},
 	}
 
-	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, nil)
+	svc.EXPECT().GetDocument(mock.Anything, "owner/repo", "docs/readme.md").Return(doc, htmlContent, []core.Heading(nil), nil)
 	svc.EXPECT().ListDocuments(mock.Anything, "owner/repo").Return(navDocs, nil)
-	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, navDocs, true).Return(nil)
+	views.EXPECT().RenderDoc(mock.Anything, doc, htmlContent, []core.Heading(nil), navDocs, true).Return(nil)
 
 	api := &API{svc: svc, views: views}
 

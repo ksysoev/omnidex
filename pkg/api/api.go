@@ -33,7 +33,7 @@ type Config struct {
 // Service defines the interface for core business logic operations.
 type Service interface {
 	IngestDocuments(ctx context.Context, req core.IngestRequest) (*core.IngestResponse, error)
-	GetDocument(ctx context.Context, repo, path string) (core.Document, []byte, error)
+	GetDocument(ctx context.Context, repo, path string) (core.Document, []byte, []core.Heading, error)
 	SearchDocs(ctx context.Context, query string, opts core.SearchOpts) (*core.SearchResults, error)
 	ListRepos(ctx context.Context) ([]core.RepoInfo, error)
 	ListDocuments(ctx context.Context, repo string) ([]core.DocumentMeta, error)
@@ -43,7 +43,7 @@ type Service interface {
 type ViewRenderer interface {
 	RenderHome(w io.Writer, repos []core.RepoInfo, partial bool) error
 	RenderRepoIndex(w io.Writer, repo string, docs []core.DocumentMeta, partial bool) error
-	RenderDoc(w io.Writer, doc core.Document, html []byte, navDocs []core.DocumentMeta, partial bool) error
+	RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error
 	RenderSearch(w io.Writer, query string, results *core.SearchResults, partial bool) error
 	RenderNotFound(w io.Writer) error
 }

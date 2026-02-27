@@ -142,9 +142,14 @@ func TestRenderDoc_FullPage(t *testing.T) {
 		{ID: "my-org/repo/advanced.md", Repo: "my-org/repo", Path: "advanced.md", Title: "Advanced Usage"},
 	}
 
+	headings := []core.Heading{
+		{Level: 1, ID: "getting-started", Text: "Getting Started"},
+		{Level: 2, ID: "installation", Text: "Installation"},
+	}
+
 	var buf bytes.Buffer
 
-	err := r.RenderDoc(&buf, doc, htmlContent, navDocs, false)
+	err := r.RenderDoc(&buf, doc, htmlContent, headings, navDocs, false)
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -153,6 +158,9 @@ func TestRenderDoc_FullPage(t *testing.T) {
 	assert.Contains(t, output, "<h1>Getting Started</h1><p>Welcome!</p>")
 	assert.Contains(t, output, "Advanced Usage")
 	assert.Contains(t, output, "getting-started.md")
+	assert.Contains(t, output, "On this page")
+	assert.Contains(t, output, "Installation")
+	assert.Contains(t, output, "data-toc-link")
 }
 
 func TestRenderDoc_Partial(t *testing.T) {
@@ -168,12 +176,76 @@ func TestRenderDoc_Partial(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := r.RenderDoc(&buf, doc, htmlContent, nil, true)
+	err := r.RenderDoc(&buf, doc, htmlContent, nil, nil, true)
 	require.NoError(t, err)
 
 	output := buf.String()
 	assert.NotContains(t, output, "<!DOCTYPE html>")
 	assert.Contains(t, output, "<p>Partial doc content</p>")
+}
+
+func TestRenderDoc_TOCHiddenWithFewHeadings(t *testing.T) {
+	r := New()
+
+	doc := core.Document{
+		ID:   "my-org/repo/guide.md",
+		Repo: "my-org/repo",
+		Path: "guide.md",
+	}
+
+	htmlContent := []byte("<h1>Guide</h1><p>Content</p>")
+
+	tests := []struct {
+		name     string
+		headings []core.Heading
+	}{
+		{name: "no headings", headings: nil},
+		{name: "single heading", headings: []core.Heading{{Level: 1, ID: "guide", Text: "Guide"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			err := r.RenderDoc(&buf, doc, htmlContent, tt.headings, nil, false)
+			require.NoError(t, err)
+
+			output := buf.String()
+			assert.NotContains(t, output, "On this page")
+		})
+	}
+}
+
+func TestRenderDoc_TOCRenderedWithMultipleHeadings(t *testing.T) {
+	r := New()
+
+	doc := core.Document{
+		ID:   "my-org/repo/guide.md",
+		Repo: "my-org/repo",
+		Path: "guide.md",
+	}
+
+	htmlContent := []byte("<h1>Guide</h1><h2>Setup</h2><h3>Details</h3>")
+
+	headings := []core.Heading{
+		{Level: 1, ID: "guide", Text: "Guide"},
+		{Level: 2, ID: "setup", Text: "Setup"},
+		{Level: 3, ID: "details", Text: "Details"},
+	}
+
+	var buf bytes.Buffer
+
+	err := r.RenderDoc(&buf, doc, htmlContent, headings, nil, false)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "On this page")
+	assert.Contains(t, output, "Guide")
+	assert.Contains(t, output, "Setup")
+	assert.Contains(t, output, "Details")
+	assert.Contains(t, output, "data-toc-link")
+	assert.Contains(t, output, "pl-3")
+	assert.Contains(t, output, "pl-6")
 }
 
 func TestRenderSearch_FullPage(t *testing.T) {

@@ -76,7 +76,7 @@ func (a *API) docPage(w http.ResponseWriter, r *http.Request) {
 
 	fullRepo := owner + "/" + repo
 
-	doc, html, err := a.svc.GetDocument(r.Context(), fullRepo, path)
+	doc, html, headings, err := a.svc.GetDocument(r.Context(), fullRepo, path)
 	if err != nil {
 		if errors.Is(err, docstore.ErrNotFound) {
 			http.NotFound(w, r)
@@ -97,7 +97,7 @@ func (a *API) docPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	if err := a.views.RenderDoc(w, doc, html, docs, isHTMXRequest(r)); err != nil {
+	if err := a.views.RenderDoc(w, doc, html, headings, docs, isHTMXRequest(r)); err != nil {
 		slog.ErrorContext(r.Context(), "Failed to render doc page", "error", err)
 	}
 }

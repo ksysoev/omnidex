@@ -3,6 +3,7 @@ package markdown
 import (
 	"testing"
 
+	"github.com/ksysoev/omnidex/pkg/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +23,7 @@ func TestRenderer_ToHTML(t *testing.T) {
 		{
 			name:     "heading",
 			input:    "# Hello World",
-			contains: "<h1>Hello World</h1>",
+			contains: `<h1 id="hello-world">Hello World</h1>`,
 		},
 		{
 			name:     "paragraph",
@@ -372,4 +373,73 @@ func TestRenderer_ToPlainText_NonMermaidCodePreserved(t *testing.T) {
 	assert.Contains(t, result, "fmt.Println")
 	// Mermaid blocks should be excluded.
 	assert.NotContains(t, result, "graph TD")
+}
+
+func TestRenderer_ExtractHeadings(t *testing.T) {
+	r := New()
+
+	tests := []struct {
+		name  string
+		input string
+		want  []core.Heading
+	}{
+		{
+			name:  "multiple headings H1 H2 H3",
+			input: "# Introduction\n\n## Getting Started\n\n### Installation\n",
+			want: []core.Heading{
+				{Level: 1, ID: "introduction", Text: "Introduction"},
+				{Level: 2, ID: "getting-started", Text: "Getting Started"},
+				{Level: 3, ID: "installation", Text: "Installation"},
+			},
+		},
+		{
+			name:  "H4 and above are excluded",
+			input: "# Title\n\n## Section\n\n### Subsection\n\n#### Deep\n\n##### Deeper\n",
+			want: []core.Heading{
+				{Level: 1, ID: "title", Text: "Title"},
+				{Level: 2, ID: "section", Text: "Section"},
+				{Level: 3, ID: "subsection", Text: "Subsection"},
+			},
+		},
+		{
+			name:  "empty document returns nil",
+			input: "",
+			want:  nil,
+		},
+		{
+			name:  "duplicate heading text gets unique IDs",
+			input: "## Section\n\nContent.\n\n## Section\n",
+			want: []core.Heading{
+				{Level: 2, ID: "section", Text: "Section"},
+				{Level: 2, ID: "section-1", Text: "Section"},
+			},
+		},
+		{
+			name:  "single heading returns slice with one element",
+			input: "# Only Heading\n\nSome content.\n",
+			want: []core.Heading{
+				{Level: 1, ID: "only-heading", Text: "Only Heading"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := r.ExtractHeadings([]byte(tt.input))
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+func TestRenderer_ToHTML_HeadingIDSurvivesSanitization(t *testing.T) {
+	r := New()
+
+	input := "# Hello World\n\n## Getting Started\n"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	assert.Contains(t, html, `<h1 id="hello-world">`)
+	assert.Contains(t, html, `<h2 id="getting-started">`)
 }

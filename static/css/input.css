@@ -23,3 +23,9 @@
 .prose del { text-decoration: line-through; color: #6b7280; }
 .prose img { max-width: 100%; border-radius: 0.5em; }
 .prose hr { border-top: 1px solid #e5e7eb; margin: 2em 0; }
+
+/* Smooth scrolling for anchor navigation */
+html { scroll-behavior: smooth; }
+
+/* TOC scroll spy active state */
+.toc-link.toc-active { color: #1d4ed8; border-left-color: #2563eb; }

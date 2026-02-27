@@ -25,9 +25,19 @@ type Renderer struct {
 
 // New creates a new view Renderer with all templates parsed.
 func New() *Renderer {
+	const tocIndentDefault = "pl-3"
+
 	funcMap := template.FuncMap{
 		"html": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // trusted content from markdown renderer
+		},
+		"tocIndent": func(level int) string {
+			switch level {
+			case 3:
+				return "pl-6"
+			default:
+				return tocIndentDefault
+			}
 		},
 	}
 
@@ -82,17 +92,19 @@ func (v *Renderer) RenderRepoIndex(w io.Writer, repo string, docs []core.Documen
 
 // docData is the data passed to the document page template.
 type docData struct {
-	Doc     core.Document
-	HTML    string
-	NavDocs []core.DocumentMeta
+	Doc      core.Document
+	HTML     string
+	Headings []core.Heading
+	NavDocs  []core.DocumentMeta
 }
 
-// RenderDoc renders a document page with sidebar navigation.
-func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, navDocs []core.DocumentMeta, partial bool) error { //nolint:gocritic // Document is passed by value for immutability
+// RenderDoc renders a document page with sidebar navigation and table of contents.
+func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error { //nolint:gocritic // Document is passed by value for immutability
 	data := docData{
-		Doc:     doc,
-		HTML:    string(html),
-		NavDocs: navDocs,
+		Doc:      doc,
+		HTML:     string(html),
+		Headings: headings,
+		NavDocs:  navDocs,
 	}
 
 	tmpl := v.docFull

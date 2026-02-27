@@ -459,11 +459,12 @@ func TestGetDocument(t *testing.T) {
 	now := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		wantDoc    Document
-		setupMocks func(*MockdocStore, *MockmarkdownRenderer)
-		name       string
-		wantErr    string
-		wantHTML   []byte
+		wantDoc      Document
+		setupMocks   func(*MockdocStore, *MockmarkdownRenderer)
+		name         string
+		wantErr      string
+		wantHTML     []byte
+		wantHeadings []Heading
 	}{
 		{
 			name: "success",
@@ -479,6 +480,7 @@ func TestGetDocument(t *testing.T) {
 				}
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/guide.md").Return(doc, nil)
 				renderer.EXPECT().ToHTML([]byte("# Guide\nContent here")).Return([]byte("<h1>Guide</h1><p>Content here</p>"), nil)
+				renderer.EXPECT().ExtractHeadings([]byte("# Guide\nContent here")).Return([]Heading{{Level: 1, ID: "guide", Text: "Guide"}})
 			},
 			wantDoc: Document{
 				ID:        "owner/repo/docs/guide.md",
@@ -489,7 +491,8 @@ func TestGetDocument(t *testing.T) {
 				CommitSHA: "abc",
 				UpdatedAt: now,
 			},
-			wantHTML: []byte("<h1>Guide</h1><p>Content here</p>"),
+			wantHTML:     []byte("<h1>Guide</h1><p>Content here</p>"),
+			wantHeadings: []Heading{{Level: 1, ID: "guide", Text: "Guide"}},
 		},
 		{
 			name: "store get error propagates",
@@ -528,17 +531,19 @@ func TestGetDocument(t *testing.T) {
 				path = "docs/bad.md"
 			}
 
-			doc, html, err := svc.GetDocument(t.Context(), repo, path)
+			doc, html, headings, err := svc.GetDocument(t.Context(), repo, path)
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.wantErr)
 				assert.Equal(t, Document{}, doc)
 				assert.Nil(t, html)
+				assert.Nil(t, headings)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantDoc, doc)
 				assert.Equal(t, tt.wantHTML, html)
+				assert.Equal(t, tt.wantHeadings, headings)
 			}
 		})
 	}

@@ -7,11 +7,13 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ksysoev/omnidex/pkg/core"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	gmm "go.abhg.dev/goldmark/mermaid"
 )
@@ -29,6 +31,9 @@ type Renderer struct {
 // New creates a new Renderer with default goldmark configuration and HTML sanitization.
 func New() *Renderer {
 	md := goldmark.New(
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
 		goldmark.WithExtensions(
 			extension.GFM,
 			&gmm.Extender{
@@ -40,6 +45,7 @@ func New() *Renderer {
 
 	policy := bluemonday.UGCPolicy()
 	policy.AllowAttrs("class").Matching(mermaidClassPattern).OnElements("pre")
+	policy.AllowAttrs("id").OnElements("h1", "h2", "h3", "h4", "h5", "h6")
 
 	return &Renderer{md: md, sanitize: policy}
 }
@@ -153,4 +159,52 @@ func (r *Renderer) ToPlainText(src []byte) string {
 	})
 
 	return strings.TrimSpace(buf.String())
+}
+
+// ExtractHeadings walks the Goldmark AST and extracts H1-H3 headings with their
+// auto-generated IDs and text content, suitable for table of contents rendering.
+func (r *Renderer) ExtractHeadings(src []byte) []core.Heading {
+	reader := text.NewReader(src)
+	doc := r.md.Parser().Parse(reader)
+
+	var headings []core.Heading
+
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		heading, ok := n.(*ast.Heading)
+		if !ok || heading.Level > 3 {
+			return ast.WalkContinue, nil
+		}
+
+		idAttr, ok := heading.AttributeString("id")
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		idBytes, ok := idAttr.([]byte)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		var buf bytes.Buffer
+
+		for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
+			if textNode, ok := child.(*ast.Text); ok {
+				buf.Write(textNode.Segment.Value(src))
+			}
+		}
+
+		headings = append(headings, core.Heading{
+			Level: heading.Level,
+			ID:    string(idBytes),
+			Text:  buf.String(),
+		})
+
+		return ast.WalkContinue, nil
+	})
+
+	return headings
 }
