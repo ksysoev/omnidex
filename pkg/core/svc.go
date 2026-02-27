@@ -96,10 +96,14 @@ func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, 
 		return 0, fmt.Errorf("failed to list stored documents for repo %s: %w", req.Repo, err)
 	}
 
-	// Build a set of all document paths from the request.
+	// Build a set of upserted document paths from the request.
+	// Only upsert actions matter here because explicit deletes have already been
+	// processed and removed from the store before sync runs.
 	requestPaths := make(map[string]struct{}, len(req.Documents))
 	for _, doc := range req.Documents {
-		requestPaths[doc.Path] = struct{}{}
+		if doc.Action == "upsert" {
+			requestPaths[doc.Path] = struct{}{}
+		}
 	}
 
 	var deleted int
