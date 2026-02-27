@@ -25,7 +25,7 @@ type Renderer struct {
 
 // New creates a new view Renderer with all templates parsed.
 func New() *Renderer {
-	const tocIndentDefault = "pl-0"
+	const tocIndentDefault = "pl-3"
 
 	funcMap := template.FuncMap{
 		"html": func(s string) template.HTML {
@@ -34,9 +34,9 @@ func New() *Renderer {
 		"tocIndent": func(level int) string {
 			switch level {
 			case 2:
-				return "pl-3"
+				return "pl-5"
 			case 3:
-				return "pl-6"
+				return "pl-8"
 			default:
 				return tocIndentDefault
 			}

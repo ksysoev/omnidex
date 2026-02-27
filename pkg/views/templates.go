@@ -13,6 +13,7 @@ const layoutHeader = `<!DOCTYPE html>
     <script>
         if (typeof mermaid !== 'undefined') { mermaid.initialize({startOnLoad: true}); }
         function initScrollSpy() {
+            if (!('IntersectionObserver' in window)) return;
             var links = document.querySelectorAll('[data-toc-link]');
             if (!links.length) return;
             if (window._tocObserver) { window._tocObserver.disconnect(); }
@@ -36,7 +37,13 @@ const layoutHeader = `<!DOCTYPE html>
                 var id = hash.slice(1);
                 try { id = decodeURIComponent(id); } catch (e) { /* use raw id */ }
                 var target = document.getElementById(id);
-                if (target) { target.scrollIntoView({behavior: 'smooth'}); }
+                if (target) {
+                    var scrollBehavior = 'smooth';
+                    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                        scrollBehavior = 'auto';
+                    }
+                    target.scrollIntoView({behavior: scrollBehavior});
+                }
             }
         }
         document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); });

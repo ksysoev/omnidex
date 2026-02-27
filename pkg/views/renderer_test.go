@@ -244,9 +244,9 @@ func TestRenderDoc_TOCRenderedWithMultipleHeadings(t *testing.T) {
 	assert.Contains(t, output, "Setup")
 	assert.Contains(t, output, "Details")
 	assert.Contains(t, output, "data-toc-link")
-	assert.Contains(t, output, "pl-0")
 	assert.Contains(t, output, "pl-3")
-	assert.Contains(t, output, "pl-6")
+	assert.Contains(t, output, "pl-5")
+	assert.Contains(t, output, "pl-8")
 }
 
 func TestRenderSearch_FullPage(t *testing.T) {
