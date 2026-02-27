@@ -18,13 +18,22 @@ const layoutHeader = `<!DOCTYPE html>
             if (!links.length) return;
             if (window._tocObserver) { window._tocObserver.disconnect(); }
             window._tocObserver = new IntersectionObserver(function(entries) {
+                var bestEntry = null;
+                var bestRatio = 0;
                 entries.forEach(function(entry) {
-                    if (entry.isIntersecting) {
-                        links.forEach(function(l) { l.classList.remove('toc-active'); });
-                        var active = document.querySelector('[data-toc-link="' + entry.target.id + '"]');
-                        if (active) { active.classList.add('toc-active'); }
+                    if (entry.isIntersecting && entry.intersectionRatio >= bestRatio) {
+                        bestRatio = entry.intersectionRatio;
+                        bestEntry = entry;
                     }
                 });
+                if (!bestEntry || !bestEntry.target || !bestEntry.target.id) return;
+                var newActiveId = bestEntry.target.id;
+                if (window._tocActiveId === newActiveId) return;
+                window._tocActiveId = newActiveId;
+                links.forEach(function(l) { l.classList.remove('toc-active'); });
+                var escapedId = (window.CSS && window.CSS.escape) ? window.CSS.escape(newActiveId) : newActiveId;
+                var active = document.querySelector('[data-toc-link="' + escapedId + '"]');
+                if (active) { active.classList.add('toc-active'); }
             }, { rootMargin: '0px 0px -80% 0px', threshold: 0 });
             var content = document.getElementById('doc-content');
             if (content) {
