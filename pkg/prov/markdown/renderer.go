@@ -64,6 +64,30 @@ func (r *Renderer) ToHTML(src []byte) ([]byte, error) {
 	return sanitized, nil
 }
 
+// extractNodeText recursively walks a node's subtree and collects all plain text
+// content, handling inline formatting such as emphasis, strong, links, and code spans.
+func extractNodeText(n ast.Node, src []byte) string {
+	var buf bytes.Buffer
+
+	_ = ast.Walk(n, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		if child == n {
+			return ast.WalkContinue, nil
+		}
+
+		if textNode, ok := child.(*ast.Text); ok {
+			buf.Write(textNode.Segment.Value(src))
+		}
+
+		return ast.WalkContinue, nil
+	})
+
+	return buf.String()
+}
+
 // ExtractTitle extracts the title from the first H1 heading in the markdown content.
 // If no H1 is found, it returns an empty string.
 func (r *Renderer) ExtractTitle(src []byte) string {
@@ -82,15 +106,7 @@ func (r *Renderer) ExtractTitle(src []byte) string {
 			return ast.WalkContinue, nil
 		}
 
-		var buf bytes.Buffer
-
-		for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
-			if textNode, ok := child.(*ast.Text); ok {
-				buf.Write(textNode.Segment.Value(src))
-			}
-		}
-
-		title = buf.String()
+		title = extractNodeText(heading, src)
 
 		return ast.WalkStop, nil
 	})
@@ -189,18 +205,10 @@ func (r *Renderer) ExtractHeadings(src []byte) []core.Heading {
 			return ast.WalkContinue, nil
 		}
 
-		var buf bytes.Buffer
-
-		for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
-			if textNode, ok := child.(*ast.Text); ok {
-				buf.Write(textNode.Segment.Value(src))
-			}
-		}
-
 		headings = append(headings, core.Heading{
 			Level: heading.Level,
 			ID:    string(idBytes),
-			Text:  buf.String(),
+			Text:  extractNodeText(heading, src),
 		})
 
 		return ast.WalkContinue, nil

@@ -277,9 +277,9 @@ func TestRenderer_ExtractTitle_FormattedH1(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "H1 with bold extracts empty (only plain text nodes)",
+			name:  "H1 with bold extracts text from inline formatting",
 			input: "# **Bold Title**\n\nContent.",
-			want:  "",
+			want:  "Bold Title",
 		},
 		{
 			name:  "multiple H1 returns first",
@@ -290,6 +290,21 @@ func TestRenderer_ExtractTitle_FormattedH1(t *testing.T) {
 			name:  "H1 with only whitespace",
 			input: "#   Spaced Title  \n\nContent.",
 			want:  "Spaced Title",
+		},
+		{
+			name:  "H1 with inline code",
+			input: "# Install `foo`\n\nContent.",
+			want:  "Install foo",
+		},
+		{
+			name:  "H1 with link",
+			input: "# The [Go](https://go.dev) Language\n\nContent.",
+			want:  "The Go Language",
+		},
+		{
+			name:  "H1 with emphasis",
+			input: "# This is *important*\n\nContent.",
+			want:  "This is important",
 		},
 	}
 
@@ -419,6 +434,15 @@ func TestRenderer_ExtractHeadings(t *testing.T) {
 			input: "# Only Heading\n\nSome content.\n",
 			want: []core.Heading{
 				{Level: 1, ID: "only-heading", Text: "Only Heading"},
+			},
+		},
+		{
+			name:  "headings with inline formatting",
+			input: "# **Bold Title**\n\n## Install `foo`\n\n### The [Link](https://example.com) Section\n",
+			want: []core.Heading{
+				{Level: 1, ID: "bold-title", Text: "Bold Title"},
+				{Level: 2, ID: "install-foo", Text: "Install foo"},
+				{Level: 3, ID: "the-linkhttpsexamplecom-section", Text: "The Link Section"},
 			},
 		},
 	}

@@ -32,8 +32,10 @@ const layoutHeader = `<!DOCTYPE html>
                 });
             }
             var hash = window.location.hash;
-            if (hash) {
-                var target = document.querySelector(hash);
+            if (hash && hash.charAt(0) === '#') {
+                var id = hash.slice(1);
+                try { id = decodeURIComponent(id); } catch (e) { /* use raw id */ }
+                var target = document.getElementById(id);
                 if (target) { target.scrollIntoView({behavior: 'smooth'}); }
             }
         }
