@@ -24,12 +24,10 @@ type searchEngine interface {
 	Search(ctx context.Context, query string, opts SearchOpts) (*SearchResults, error)
 }
 
-// markdownRenderer defines the interface for markdown processing.
+// markdownRenderer defines the interface for markdown processing used by Service.
 type markdownRenderer interface {
-	ToHTML(src []byte) ([]byte, error)
 	ToHTMLWithHeadings(src []byte) ([]byte, []Heading, error)
 	ExtractTitle(src []byte) string
-	ExtractHeadings(src []byte) []Heading
 	ToPlainText(src []byte) string
 }
 

@@ -19,54 +19,6 @@ func (_m *MockmarkdownRenderer) EXPECT() *MockmarkdownRenderer_Expecter {
 	return &MockmarkdownRenderer_Expecter{mock: &_m.Mock}
 }
 
-// ExtractHeadings provides a mock function with given fields: src
-func (_m *MockmarkdownRenderer) ExtractHeadings(src []byte) []Heading {
-	ret := _m.Called(src)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ExtractHeadings")
-	}
-
-	var r0 []Heading
-	if rf, ok := ret.Get(0).(func([]byte) []Heading); ok {
-		r0 = rf(src)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]Heading)
-		}
-	}
-
-	return r0
-}
-
-// MockmarkdownRenderer_ExtractHeadings_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ExtractHeadings'
-type MockmarkdownRenderer_ExtractHeadings_Call struct {
-	*mock.Call
-}
-
-// ExtractHeadings is a helper method to define mock.On call
-//   - src []byte
-func (_e *MockmarkdownRenderer_Expecter) ExtractHeadings(src interface{}) *MockmarkdownRenderer_ExtractHeadings_Call {
-	return &MockmarkdownRenderer_ExtractHeadings_Call{Call: _e.mock.On("ExtractHeadings", src)}
-}
-
-func (_c *MockmarkdownRenderer_ExtractHeadings_Call) Run(run func(src []byte)) *MockmarkdownRenderer_ExtractHeadings_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]byte))
-	})
-	return _c
-}
-
-func (_c *MockmarkdownRenderer_ExtractHeadings_Call) Return(_a0 []Heading) *MockmarkdownRenderer_ExtractHeadings_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockmarkdownRenderer_ExtractHeadings_Call) RunAndReturn(run func([]byte) []Heading) *MockmarkdownRenderer_ExtractHeadings_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // ExtractTitle provides a mock function with given fields: src
 func (_m *MockmarkdownRenderer) ExtractTitle(src []byte) string {
 	ret := _m.Called(src)
@@ -109,64 +61,6 @@ func (_c *MockmarkdownRenderer_ExtractTitle_Call) Return(_a0 string) *Mockmarkdo
 }
 
 func (_c *MockmarkdownRenderer_ExtractTitle_Call) RunAndReturn(run func([]byte) string) *MockmarkdownRenderer_ExtractTitle_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ToHTML provides a mock function with given fields: src
-func (_m *MockmarkdownRenderer) ToHTML(src []byte) ([]byte, error) {
-	ret := _m.Called(src)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ToHTML")
-	}
-
-	var r0 []byte
-	var r1 error
-	if rf, ok := ret.Get(0).(func([]byte) ([]byte, error)); ok {
-		return rf(src)
-	}
-	if rf, ok := ret.Get(0).(func([]byte) []byte); ok {
-		r0 = rf(src)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]byte)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func([]byte) error); ok {
-		r1 = rf(src)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockmarkdownRenderer_ToHTML_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ToHTML'
-type MockmarkdownRenderer_ToHTML_Call struct {
-	*mock.Call
-}
-
-// ToHTML is a helper method to define mock.On call
-//   - src []byte
-func (_e *MockmarkdownRenderer_Expecter) ToHTML(src interface{}) *MockmarkdownRenderer_ToHTML_Call {
-	return &MockmarkdownRenderer_ToHTML_Call{Call: _e.mock.On("ToHTML", src)}
-}
-
-func (_c *MockmarkdownRenderer_ToHTML_Call) Run(run func(src []byte)) *MockmarkdownRenderer_ToHTML_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]byte))
-	})
-	return _c
-}
-
-func (_c *MockmarkdownRenderer_ToHTML_Call) Return(_a0 []byte, _a1 error) *MockmarkdownRenderer_ToHTML_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockmarkdownRenderer_ToHTML_Call) RunAndReturn(run func([]byte) ([]byte, error)) *MockmarkdownRenderer_ToHTML_Call {
 	_c.Call.Return(run)
 	return _c
 }
