@@ -177,12 +177,38 @@ func (r *Renderer) ToPlainText(src []byte) string {
 	return strings.TrimSpace(buf.String())
 }
 
+// ToHTMLWithHeadings parses the markdown source once, extracts H1-H3 headings from
+// the AST for table of contents rendering, then renders the AST to sanitized HTML.
+// This avoids the cost of parsing the same source twice compared to calling ToHTML
+// and ExtractHeadings separately.
+func (r *Renderer) ToHTMLWithHeadings(src []byte) ([]byte, []core.Heading, error) {
+	reader := text.NewReader(src)
+	doc := r.md.Parser().Parse(reader)
+
+	headings := collectHeadings(doc, src)
+
+	var buf bytes.Buffer
+	if err := r.md.Renderer().Render(&buf, src, doc); err != nil {
+		return nil, nil, fmt.Errorf("failed to render markdown to HTML: %w", err)
+	}
+
+	sanitized := r.sanitize.SanitizeBytes(buf.Bytes())
+
+	return sanitized, headings, nil
+}
+
 // ExtractHeadings walks the Goldmark AST and extracts H1-H3 headings with their
 // auto-generated IDs and text content, suitable for table of contents rendering.
 func (r *Renderer) ExtractHeadings(src []byte) []core.Heading {
 	reader := text.NewReader(src)
 	doc := r.md.Parser().Parse(reader)
 
+	return collectHeadings(doc, src)
+}
+
+// collectHeadings walks a parsed AST and extracts H1-H3 headings with their
+// auto-generated IDs and text content.
+func collectHeadings(doc ast.Node, src []byte) []core.Heading {
 	var headings []core.Heading
 
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {

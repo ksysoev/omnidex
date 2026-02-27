@@ -171,6 +171,73 @@ func (_c *MockmarkdownRenderer_ToHTML_Call) RunAndReturn(run func([]byte) ([]byt
 	return _c
 }
 
+// ToHTMLWithHeadings provides a mock function with given fields: src
+func (_m *MockmarkdownRenderer) ToHTMLWithHeadings(src []byte) ([]byte, []Heading, error) {
+	ret := _m.Called(src)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ToHTMLWithHeadings")
+	}
+
+	var r0 []byte
+	var r1 []Heading
+	var r2 error
+	if rf, ok := ret.Get(0).(func([]byte) ([]byte, []Heading, error)); ok {
+		return rf(src)
+	}
+	if rf, ok := ret.Get(0).(func([]byte) []byte); ok {
+		r0 = rf(src)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func([]byte) []Heading); ok {
+		r1 = rf(src)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]Heading)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func([]byte) error); ok {
+		r2 = rf(src)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// MockmarkdownRenderer_ToHTMLWithHeadings_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ToHTMLWithHeadings'
+type MockmarkdownRenderer_ToHTMLWithHeadings_Call struct {
+	*mock.Call
+}
+
+// ToHTMLWithHeadings is a helper method to define mock.On call
+//   - src []byte
+func (_e *MockmarkdownRenderer_Expecter) ToHTMLWithHeadings(src interface{}) *MockmarkdownRenderer_ToHTMLWithHeadings_Call {
+	return &MockmarkdownRenderer_ToHTMLWithHeadings_Call{Call: _e.mock.On("ToHTMLWithHeadings", src)}
+}
+
+func (_c *MockmarkdownRenderer_ToHTMLWithHeadings_Call) Run(run func(src []byte)) *MockmarkdownRenderer_ToHTMLWithHeadings_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockmarkdownRenderer_ToHTMLWithHeadings_Call) Return(_a0 []byte, _a1 []Heading, _a2 error) *MockmarkdownRenderer_ToHTMLWithHeadings_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *MockmarkdownRenderer_ToHTMLWithHeadings_Call) RunAndReturn(run func([]byte) ([]byte, []Heading, error)) *MockmarkdownRenderer_ToHTMLWithHeadings_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ToPlainText provides a mock function with given fields: src
 func (_m *MockmarkdownRenderer) ToPlainText(src []byte) string {
 	ret := _m.Called(src)

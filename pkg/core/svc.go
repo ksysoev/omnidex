@@ -27,6 +27,7 @@ type searchEngine interface {
 // markdownRenderer defines the interface for markdown processing.
 type markdownRenderer interface {
 	ToHTML(src []byte) ([]byte, error)
+	ToHTMLWithHeadings(src []byte) ([]byte, []Heading, error)
 	ExtractTitle(src []byte) string
 	ExtractHeadings(src []byte) []Heading
 	ToPlainText(src []byte) string
@@ -134,12 +135,10 @@ func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document,
 		return Document{}, nil, nil, fmt.Errorf("failed to get document: %w", err)
 	}
 
-	html, err := s.renderer.ToHTML([]byte(doc.Content))
+	html, headings, err := s.renderer.ToHTMLWithHeadings([]byte(doc.Content))
 	if err != nil {
 		return Document{}, nil, nil, fmt.Errorf("failed to render document: %w", err)
 	}
-
-	headings := s.renderer.ExtractHeadings([]byte(doc.Content))
 
 	return doc, html, headings, nil
 }

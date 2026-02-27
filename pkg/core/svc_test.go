@@ -479,8 +479,11 @@ func TestGetDocument(t *testing.T) {
 					UpdatedAt: now,
 				}
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/guide.md").Return(doc, nil)
-				renderer.EXPECT().ToHTML([]byte("# Guide\nContent here")).Return([]byte("<h1>Guide</h1><p>Content here</p>"), nil)
-				renderer.EXPECT().ExtractHeadings([]byte("# Guide\nContent here")).Return([]Heading{{Level: 1, ID: "guide", Text: "Guide"}})
+				renderer.EXPECT().ToHTMLWithHeadings([]byte("# Guide\nContent here")).Return(
+					[]byte("<h1>Guide</h1><p>Content here</p>"),
+					[]Heading{{Level: 1, ID: "guide", Text: "Guide"}},
+					nil,
+				)
 			},
 			wantDoc: Document{
 				ID:        "owner/repo/docs/guide.md",
@@ -509,7 +512,7 @@ func TestGetDocument(t *testing.T) {
 					Content: "bad content",
 				}
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/bad.md").Return(doc, nil)
-				renderer.EXPECT().ToHTML([]byte("bad content")).Return(nil, errors.New("render error"))
+				renderer.EXPECT().ToHTMLWithHeadings([]byte("bad content")).Return(nil, nil, errors.New("render error"))
 			},
 			wantErr: "render error",
 		},

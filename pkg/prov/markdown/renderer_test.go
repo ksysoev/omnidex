@@ -467,3 +467,68 @@ func TestRenderer_ToHTML_HeadingIDSurvivesSanitization(t *testing.T) {
 	assert.Contains(t, html, `<h1 id="hello-world">`)
 	assert.Contains(t, html, `<h2 id="getting-started">`)
 }
+
+func TestRenderer_ToHTMLWithHeadings(t *testing.T) {
+	r := New()
+
+	input := "# Introduction\n\nSome content.\n\n## Getting Started\n\n### Installation\n\nMore content.\n"
+
+	html, headings, err := r.ToHTMLWithHeadings([]byte(input))
+	assert.NoError(t, err)
+
+	// Verify HTML output matches ToHTML
+	expectedHTML, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+	assert.Equal(t, string(expectedHTML), string(html))
+
+	// Verify headings match ExtractHeadings
+	expectedHeadings := r.ExtractHeadings([]byte(input))
+	assert.Equal(t, expectedHeadings, headings)
+}
+
+func TestRenderer_ToHTMLWithHeadings_EmptyInput(t *testing.T) {
+	r := New()
+
+	html, headings, err := r.ToHTMLWithHeadings([]byte(""))
+	assert.NoError(t, err)
+	assert.Empty(t, string(html))
+	assert.Nil(t, headings)
+}
+
+func TestRenderer_ToHTMLWithHeadings_NoHeadings(t *testing.T) {
+	r := New()
+
+	html, headings, err := r.ToHTMLWithHeadings([]byte("Just a paragraph.\n"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(html), "Just a paragraph.")
+	assert.Nil(t, headings)
+}
+
+func TestRenderer_ToHTMLWithHeadings_InlineFormatting(t *testing.T) {
+	r := New()
+
+	input := "# **Bold Title**\n\n## Install `foo`\n\n### The [Link](https://example.com) Section\n"
+
+	html, headings, err := r.ToHTMLWithHeadings([]byte(input))
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(html), `<h1 id="bold-title">`)
+	assert.Equal(t, []core.Heading{
+		{Level: 1, ID: "bold-title", Text: "Bold Title"},
+		{Level: 2, ID: "install-foo", Text: "Install foo"},
+		{Level: 3, ID: "the-linkhttpsexamplecom-section", Text: "The Link Section"},
+	}, headings)
+}
+
+func TestRenderer_ToHTMLWithHeadings_SanitizesOutput(t *testing.T) {
+	r := New()
+
+	input := "# Title\n\n<script>alert('xss')</script>\n"
+
+	html, headings, err := r.ToHTMLWithHeadings([]byte(input))
+	assert.NoError(t, err)
+	assert.NotContains(t, string(html), "<script>")
+	assert.Equal(t, []core.Heading{
+		{Level: 1, ID: "title", Text: "Title"},
+	}, headings)
+}

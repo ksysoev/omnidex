@@ -13,10 +13,14 @@ const layoutHeader = `<!DOCTYPE html>
     <script>
         if (typeof mermaid !== 'undefined') { mermaid.initialize({startOnLoad: true}); }
         function initScrollSpy() {
+            if (window._tocObserver) {
+                window._tocObserver.disconnect();
+                window._tocObserver = null;
+            }
+            window._tocActiveId = null;
             if (!('IntersectionObserver' in window)) return;
             var links = document.querySelectorAll('[data-toc-link]');
             if (!links.length) return;
-            if (window._tocObserver) { window._tocObserver.disconnect(); }
             window._tocObserver = new IntersectionObserver(function(entries) {
                 var bestEntry = null;
                 var bestRatio = 0;
