@@ -18,33 +18,37 @@ const layoutHeader = `<!DOCTYPE html>
                 window._tocObserver = null;
             }
             window._tocActiveId = null;
+            window._tocHeadingStates = {};
             if (!('IntersectionObserver' in window)) return;
             var links = document.querySelectorAll('[data-toc-link]');
             if (!links.length) return;
+            var content = document.getElementById('doc-content');
+            if (!content) return;
+            var headings = content.querySelectorAll('.prose h1[id], .prose h2[id], .prose h3[id]');
+            if (!headings.length) return;
             window._tocObserver = new IntersectionObserver(function(entries) {
-                var bestEntry = null;
-                var bestRatio = 0;
                 entries.forEach(function(entry) {
-                    if (entry.isIntersecting && entry.intersectionRatio >= bestRatio) {
-                        bestRatio = entry.intersectionRatio;
-                        bestEntry = entry;
+                    if (entry.target.id) {
+                        window._tocHeadingStates[entry.target.id] = entry.isIntersecting;
                     }
                 });
-                if (!bestEntry || !bestEntry.target || !bestEntry.target.id) return;
-                var newActiveId = bestEntry.target.id;
-                if (window._tocActiveId === newActiveId) return;
-                window._tocActiveId = newActiveId;
+                var activeId = null;
+                for (var i = 0; i < headings.length; i++) {
+                    if (window._tocHeadingStates[headings[i].id]) {
+                        activeId = headings[i].id;
+                        break;
+                    }
+                }
+                if (!activeId || window._tocActiveId === activeId) return;
+                window._tocActiveId = activeId;
                 links.forEach(function(l) { l.classList.remove('toc-active'); });
-                var escapedId = (window.CSS && window.CSS.escape) ? window.CSS.escape(newActiveId) : newActiveId;
+                var escapedId = (window.CSS && window.CSS.escape) ? window.CSS.escape(activeId) : activeId;
                 var active = document.querySelector('[data-toc-link="' + escapedId + '"]');
                 if (active) { active.classList.add('toc-active'); }
             }, { rootMargin: '0px 0px -80% 0px', threshold: 0 });
-            var content = document.getElementById('doc-content');
-            if (content) {
-                content.querySelectorAll('.prose h1[id], .prose h2[id], .prose h3[id]').forEach(function(h) {
-                    window._tocObserver.observe(h);
-                });
-            }
+            headings.forEach(function(h) {
+                window._tocObserver.observe(h);
+            });
             var hash = window.location.hash;
             if (hash && hash.charAt(0) === '#') {
                 var id = hash.slice(1);
