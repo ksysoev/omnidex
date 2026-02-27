@@ -118,7 +118,7 @@ const searchResultsBody = `{{if .Results}}
         {{range .Results.Hits}}
         <a href="/docs/{{.Repo}}/{{.Path}}" hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
            class="block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
-            <h3 class="text-lg font-medium text-blue-600 mb-1">{{.Title}}</h3>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">{{.Title}}</h3>
             <p class="text-sm text-gray-500 mb-2">{{.Repo}}/{{.Path}}</p>
             {{range .Fragments}}
             <p class="text-sm text-gray-600">{{.}}</p>
@@ -150,7 +150,7 @@ const repoIndexContentBody = `
         <a href="/docs/{{.Repo}}/{{.Path}}"
            hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
            class="block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
-            <h2 class="text-lg font-medium text-blue-600 mb-1">{{.Title}}</h2>
+            <h2 class="text-lg font-semibold text-gray-900 mb-2">{{.Title}}</h2>
             <div class="flex items-center gap-4 text-sm text-gray-500">
                 <span>{{.Path}}</span>
                 <span>Updated {{.UpdatedAt.Format "Jan 02, 2006"}}</span>
