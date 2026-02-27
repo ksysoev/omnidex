@@ -299,6 +299,162 @@ func TestIngestDocuments_DeleteErrors(t *testing.T) {
 	}
 }
 
+func TestIngestDocuments_SyncDeletesStaleDocuments(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Keep"
+
+	// Mock the upsert for the document in the request.
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Keep")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Keep")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Keep").Return(nil)
+
+	// Mock store.List returning both the kept doc and a stale doc.
+	now := time.Now()
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/keep.md", Repo: "owner/repo", Path: "keep.md", Title: "Keep", UpdatedAt: now},
+		{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
+	}, nil)
+
+	// Mock deletion of the stale document.
+	store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(nil)
+	search.EXPECT().Remove(mock.Anything, "owner/repo/stale.md").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "keep.md", Content: content, Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+	assert.Equal(t, 1, resp.Deleted)
+}
+
+func TestIngestDocuments_SyncNoStaleDocuments(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	// All stored documents match the request — nothing to delete.
+	now := time.Now()
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md", Title: "Doc", UpdatedAt: now},
+	}, nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+	assert.Equal(t, 0, resp.Deleted)
+}
+
+func TestIngestDocuments_SyncDisabledDoesNotDelete(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	// store.List should NOT be called when sync is disabled.
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      false,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+	assert.Equal(t, 0, resp.Deleted)
+}
+
+func TestIngestDocuments_SyncErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		wantErrMsg string
+	}{
+		{
+			name: "store list error propagates",
+			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, _ *MockmarkdownRenderer) {
+				store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, errors.New("list failed"))
+			},
+			wantErrMsg: "list failed",
+		},
+		{
+			name: "sync delete store error propagates",
+			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, _ *MockmarkdownRenderer) {
+				now := time.Now()
+				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
+				}, nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(errors.New("delete failed"))
+			},
+			wantErrMsg: "delete failed",
+		},
+		{
+			name: "sync delete search remove error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+				now := time.Now()
+				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
+				}, nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(nil)
+				search.EXPECT().Remove(mock.Anything, "owner/repo/stale.md").Return(errors.New("remove failed"))
+			},
+			wantErrMsg: "remove failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, store, search, renderer := newTestService(t)
+			tt.setupMocks(store, search, renderer)
+
+			req := IngestRequest{
+				Repo:      "owner/repo",
+				CommitSHA: "abc",
+				Sync:      true,
+				Documents: nil,
+			}
+
+			resp, err := svc.IngestDocuments(t.Context(), req)
+			require.Error(t, err)
+			assert.Nil(t, resp)
+			assert.ErrorContains(t, err, tt.wantErrMsg)
+		})
+	}
+}
+
 func TestGetDocument(t *testing.T) {
 	now := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
 

@@ -57,6 +57,7 @@ type IngestRequest struct {
 	Repo      string           `json:"repo"`
 	CommitSHA string           `json:"commit_sha"`
 	Documents []IngestDocument `json:"documents"`
+	Sync      bool             `json:"sync,omitempty"`
 }
 
 // IngestDocument represents a single document in an ingest request.

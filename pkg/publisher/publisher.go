@@ -41,8 +41,9 @@ func New(baseURL, apiKey string) *Publisher {
 
 // Publish collects documentation files from docsPath matching filePattern,
 // builds an ingest request, and sends it to the Omnidex server.
+// When sync is true, the server will remove any stored documents not present in this publish.
 // It returns the server response or an error if any step fails.
-func (p *Publisher) Publish(ctx context.Context, docsPath, filePattern, repo, commitSHA string) (*core.IngestResponse, error) {
+func (p *Publisher) Publish(ctx context.Context, docsPath, filePattern, repo, commitSHA string, sync bool) (*core.IngestResponse, error) {
 	files, err := CollectFiles(docsPath, filePattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect files: %w", err)
@@ -55,7 +56,7 @@ func (p *Publisher) Publish(ctx context.Context, docsPath, filePattern, repo, co
 
 	slog.Info("Collected documentation files", "count", len(files))
 
-	req := BuildIngestRequest(repo, commitSHA, files)
+	req := BuildIngestRequest(repo, commitSHA, files, sync)
 
 	resp, err := p.SendIngestRequest(ctx, req)
 	if err != nil {
@@ -128,7 +129,8 @@ func CollectFiles(docsPath, filePattern string) (map[string]string, error) {
 
 // BuildIngestRequest constructs an IngestRequest from the collected file contents.
 // All documents are set to action "upsert". Documents are sorted by path for deterministic ordering.
-func BuildIngestRequest(repo, commitSHA string, files map[string]string) core.IngestRequest {
+// When sync is true, the server will treat this as the complete document set and remove stale entries.
+func BuildIngestRequest(repo, commitSHA string, files map[string]string, sync bool) core.IngestRequest {
 	documents := make([]core.IngestDocument, 0, len(files))
 
 	// Sort keys for deterministic ordering.
@@ -151,6 +153,7 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string) core.In
 		Repo:      repo,
 		CommitSHA: commitSHA,
 		Documents: documents,
+		Sync:      sync,
 	}
 }
 

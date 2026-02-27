@@ -48,6 +48,9 @@ func New(store docStore, search searchEngine, renderer markdownRenderer) *Servic
 }
 
 // IngestDocuments processes a batch of document upserts and deletes from a repository.
+// When req.Sync is true, after processing all documents the server treats the incoming
+// document set as the complete truth for the repo and removes any stored documents
+// whose paths are not present in the request.
 func (s *Service) IngestDocuments(ctx context.Context, req IngestRequest) (*IngestResponse, error) {
 	var indexed, deleted int
 
@@ -70,10 +73,56 @@ func (s *Service) IngestDocuments(ctx context.Context, req IngestRequest) (*Inge
 		}
 	}
 
+	if req.Sync {
+		syncDeleted, err := s.syncDeleteStale(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sync stale documents: %w", err)
+		}
+
+		deleted += syncDeleted
+	}
+
 	return &IngestResponse{
 		Indexed: indexed,
 		Deleted: deleted,
 	}, nil
+}
+
+// syncDeleteStale removes stored documents that are not present in the ingest request.
+// It returns the number of stale documents deleted.
+func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, error) {
+	stored, err := s.store.List(ctx, req.Repo)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list stored documents for repo %s: %w", req.Repo, err)
+	}
+
+	// Build a set of upserted document paths from the request.
+	// Only upsert actions matter here because explicit deletes have already been
+	// processed and removed from the store before sync runs.
+	requestPaths := make(map[string]struct{}, len(req.Documents))
+	for _, doc := range req.Documents {
+		if doc.Action == "upsert" {
+			requestPaths[doc.Path] = struct{}{}
+		}
+	}
+
+	var deleted int
+
+	for _, doc := range stored {
+		if _, exists := requestPaths[doc.Path]; exists {
+			continue
+		}
+
+		slog.InfoContext(ctx, "sync: removing stale document", "repo", req.Repo, "path", doc.Path)
+
+		if err := s.deleteDocument(ctx, req.Repo, doc.Path); err != nil {
+			return deleted, fmt.Errorf("failed to delete stale document %s: %w", doc.Path, err)
+		}
+
+		deleted++
+	}
+
+	return deleted, nil
 }
 
 // GetDocument retrieves a document and renders its markdown content to HTML.

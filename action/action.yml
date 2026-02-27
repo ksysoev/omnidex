@@ -16,6 +16,10 @@ inputs:
     description: 'Glob pattern for documentation files'
     required: false
     default: '**/*.md'
+  sync:
+    description: 'Enable full sync mode to remove stale documents not present in this publish'
+    required: false
+    default: 'true'
 
 runs:
   using: 'docker'
@@ -28,5 +32,6 @@ runs:
     - /github/workspace/${{ inputs.docs_path }}
     - --file-pattern
     - ${{ inputs.file_pattern }}
+    - --sync=${{ inputs.sync }}
   env:
     OMNIDEX_API_KEY: ${{ inputs.api_key }}

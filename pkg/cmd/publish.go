@@ -17,6 +17,7 @@ type publishFlags struct {
 	FilePattern string
 	Repo        string
 	CommitSHA   string
+	Sync        bool
 }
 
 // newPublishCmd creates a cobra command that publishes documentation files to an Omnidex instance.
@@ -39,6 +40,7 @@ func newPublishCmd(flags *cmdFlags) *cobra.Command {
 	cmd.Flags().StringVar(&pubFlags.FilePattern, "file-pattern", "**/*.md", "glob pattern for documentation files")
 	cmd.Flags().StringVar(&pubFlags.Repo, "repo", "", "repository identifier (owner/repo)")
 	cmd.Flags().StringVar(&pubFlags.CommitSHA, "commit-sha", "", "git commit SHA")
+	cmd.Flags().BoolVar(&pubFlags.Sync, "sync", true, "enable full sync mode to remove stale documents not present in this publish")
 
 	// Bind environment variables as defaults for flags that are not explicitly set.
 	bindEnvDefaults(cmd, pubFlags)
@@ -55,6 +57,7 @@ func bindEnvDefaults(cmd *cobra.Command, _ *publishFlags) {
 		"file-pattern": "FILE_PATTERN",
 		"repo":         "GITHUB_REPOSITORY",
 		"commit-sha":   "GITHUB_SHA",
+		"sync":         "OMNIDEX_SYNC",
 	}
 
 	for flagName, envVar := range envBindings {
@@ -90,11 +93,12 @@ func runPublish(ctx context.Context, flags *cmdFlags, pubFlags *publishFlags) er
 		"file_pattern", pubFlags.FilePattern,
 		"repo", pubFlags.Repo,
 		"commit_sha", pubFlags.CommitSHA,
+		"sync", pubFlags.Sync,
 	)
 
 	pub := publisher.New(pubFlags.URL, pubFlags.APIKey)
 
-	resp, err := pub.Publish(ctx, pubFlags.DocsPath, pubFlags.FilePattern, pubFlags.Repo, pubFlags.CommitSHA)
+	resp, err := pub.Publish(ctx, pubFlags.DocsPath, pubFlags.FilePattern, pubFlags.Repo, pubFlags.CommitSHA, pubFlags.Sync)
 	if err != nil {
 		return err
 	}
