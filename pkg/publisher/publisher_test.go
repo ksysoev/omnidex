@@ -90,10 +90,11 @@ func TestBuildIngestRequest(t *testing.T) {
 		"api/readme.md": "# API",
 	}
 
-	req := BuildIngestRequest("owner/repo", "abc123", files)
+	req := BuildIngestRequest("owner/repo", "abc123", files, true)
 
 	assert.Equal(t, "owner/repo", req.Repo)
 	assert.Equal(t, "abc123", req.CommitSHA)
+	assert.True(t, req.Sync)
 	assert.Len(t, req.Documents, 2)
 
 	// Documents should be sorted by path.
@@ -106,10 +107,23 @@ func TestBuildIngestRequest(t *testing.T) {
 	assert.Equal(t, "upsert", req.Documents[1].Action)
 }
 
-func TestBuildIngestRequest_Empty(t *testing.T) {
-	req := BuildIngestRequest("owner/repo", "sha", map[string]string{})
+func TestBuildIngestRequest_SyncFalse(t *testing.T) {
+	files := map[string]string{
+		"readme.md": "# Hello",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
 
 	assert.Equal(t, "owner/repo", req.Repo)
+	assert.False(t, req.Sync)
+	assert.Len(t, req.Documents, 1)
+}
+
+func TestBuildIngestRequest_Empty(t *testing.T) {
+	req := BuildIngestRequest("owner/repo", "sha", map[string]string{}, true)
+
+	assert.Equal(t, "owner/repo", req.Repo)
+	assert.True(t, req.Sync)
 	assert.Empty(t, req.Documents)
 }
 
@@ -127,6 +141,7 @@ func TestSendIngestRequest_Success(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &ingestReq))
 		assert.Equal(t, "owner/repo", ingestReq.Repo)
 		assert.Equal(t, "sha123", ingestReq.CommitSHA)
+		assert.True(t, ingestReq.Sync)
 		assert.Len(t, ingestReq.Documents, 1)
 
 		resp := core.IngestResponse{Indexed: 1, Deleted: 0}
@@ -141,6 +156,7 @@ func TestSendIngestRequest_Success(t *testing.T) {
 	req := core.IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "sha123",
+		Sync:      true,
 		Documents: []core.IngestDocument{
 			{Path: "doc.md", Content: "# Doc", Action: "upsert"},
 		},
@@ -231,6 +247,7 @@ func TestPublish_EndToEnd(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &ingestReq))
 		assert.Equal(t, "owner/repo", ingestReq.Repo)
 		assert.Equal(t, "abc123", ingestReq.CommitSHA)
+		assert.True(t, ingestReq.Sync)
 		assert.Len(t, ingestReq.Documents, 2)
 
 		resp := core.IngestResponse{Indexed: 2, Deleted: 0}
@@ -249,7 +266,7 @@ func TestPublish_EndToEnd(t *testing.T) {
 
 	pub := New(srv.URL, "secret")
 
-	resp, err := pub.Publish(t.Context(), dir, "**/*.md", "owner/repo", "abc123")
+	resp, err := pub.Publish(t.Context(), dir, "**/*.md", "owner/repo", "abc123", true)
 	require.NoError(t, err)
 	assert.Equal(t, 2, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
@@ -260,7 +277,7 @@ func TestPublish_NoFiles(t *testing.T) {
 
 	pub := New("http://localhost", "key")
 
-	resp, err := pub.Publish(t.Context(), dir, "**/*.md", "owner/repo", "")
+	resp, err := pub.Publish(t.Context(), dir, "**/*.md", "owner/repo", "", true)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
@@ -278,7 +295,7 @@ func TestPublish_ServerError(t *testing.T) {
 
 	pub := New(srv.URL, "key")
 
-	resp, err := pub.Publish(t.Context(), dir, "**/*.md", "owner/repo", "sha")
+	resp, err := pub.Publish(t.Context(), dir, "**/*.md", "owner/repo", "sha", true)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to publish documentation")
