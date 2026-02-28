@@ -295,7 +295,12 @@ const openapiDocContentBody = `
                 var specEl = document.getElementById('openapi-spec');
                 if (!specEl) return;
                 var spec;
-                try { spec = JSON.parse(specEl.textContent); } catch(e) { return; }
+                try {
+                    spec = JSON.parse(specEl.textContent);
+                } catch (e) {
+                    console.error('Failed to parse OpenAPI spec JSON from #openapi-spec:', e);
+                    return;
+                }
 
                 function initScalar() {
                     var container = document.getElementById('scalar-api-reference');
@@ -333,7 +338,9 @@ const openapiDocContentBody = `
                 }
 
                 var script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference';
+                script.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.46.0';
+                script.integrity = 'sha384-J8SKUvgS9P4wa0c+HdF7IJMAxLKPA2MTTiMrMHEnBGrImueMygyFW5kWh60jyN1j';
+                script.crossOrigin = 'anonymous';
                 script.async = true;
                 script.setAttribute('data-scalar-api-reference', 'true');
                 script.onload = function() {
