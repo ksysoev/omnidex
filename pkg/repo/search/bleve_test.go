@@ -611,3 +611,115 @@ func TestBleveEngine_SearchHighlightingWorks(t *testing.T) {
 	require.NotEmpty(t, results.Hits)
 	assert.NotEmpty(t, results.Hits[0].Fragments, "search results should include highlight fragments")
 }
+
+func TestBleveEngine_ListByRepo(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	// Index documents across two different repos.
+	docs := []struct {
+		doc     core.Document
+		content string
+	}{
+		{
+			doc: core.Document{
+				ID:        "owner/repo-a/doc1.md",
+				Repo:      "owner/repo-a",
+				Path:      "doc1.md",
+				Title:     "Doc 1",
+				UpdatedAt: time.Now(),
+			},
+			content: "First document",
+		},
+		{
+			doc: core.Document{
+				ID:        "owner/repo-a/doc2.md",
+				Repo:      "owner/repo-a",
+				Path:      "doc2.md",
+				Title:     "Doc 2",
+				UpdatedAt: time.Now(),
+			},
+			content: "Second document",
+		},
+		{
+			doc: core.Document{
+				ID:        "owner/repo-b/other.md",
+				Repo:      "owner/repo-b",
+				Path:      "other.md",
+				Title:     "Other",
+				UpdatedAt: time.Now(),
+			},
+			content: "Other repo document",
+		},
+	}
+
+	for _, d := range docs {
+		err = engine.Index(t.Context(), d.doc, d.content)
+		require.NoError(t, err)
+	}
+
+	// List repo-a — should return exactly 2 doc IDs.
+	ids, err := engine.ListByRepo(t.Context(), "owner/repo-a")
+	require.NoError(t, err)
+	assert.Len(t, ids, 2)
+	assert.ElementsMatch(t, []string{"owner/repo-a/doc1.md", "owner/repo-a/doc2.md"}, ids)
+
+	// List repo-b — should return exactly 1 doc ID.
+	ids, err = engine.ListByRepo(t.Context(), "owner/repo-b")
+	require.NoError(t, err)
+	assert.Len(t, ids, 1)
+	assert.Equal(t, "owner/repo-b/other.md", ids[0])
+}
+
+func TestBleveEngine_ListByRepoEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	// No documents indexed — ListByRepo should return an empty slice.
+	ids, err := engine.ListByRepo(t.Context(), "owner/nonexistent")
+	require.NoError(t, err)
+	assert.Empty(t, ids)
+}
+
+func TestBleveEngine_ListByRepoAfterRemove(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	doc := core.Document{
+		ID:        "owner/repo/removable.md",
+		Repo:      "owner/repo",
+		Path:      "removable.md",
+		Title:     "Removable",
+		UpdatedAt: time.Now(),
+	}
+
+	err = engine.Index(t.Context(), doc, "content")
+	require.NoError(t, err)
+
+	ids, err := engine.ListByRepo(t.Context(), "owner/repo")
+	require.NoError(t, err)
+	assert.Len(t, ids, 1)
+
+	// Remove the document and verify it no longer appears.
+	err = engine.Remove(t.Context(), "owner/repo/removable.md")
+	require.NoError(t, err)
+
+	ids, err = engine.ListByRepo(t.Context(), "owner/repo")
+	require.NoError(t, err)
+	assert.Empty(t, ids)
+}

@@ -134,6 +134,30 @@ func (e *BleveEngine) DocCount() (uint64, error) {
 	return count, nil
 }
 
+// maxListByRepoSize is the upper bound on documents returned by ListByRepo.
+const maxListByRepoSize = 10000
+
+// ListByRepo returns the IDs of all documents in the search index that belong to the given repository.
+func (e *BleveEngine) ListByRepo(_ context.Context, repo string) ([]string, error) {
+	q := bleve.NewTermQuery(repo)
+	q.SetField("repo")
+
+	req := bleve.NewSearchRequestOptions(q, maxListByRepoSize, 0, false)
+	req.Fields = []string{}
+
+	result, err := e.index.Search(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list documents for repo %s: %w", repo, err)
+	}
+
+	ids := make([]string, 0, len(result.Hits))
+	for _, hit := range result.Hits {
+		ids = append(ids, hit.ID)
+	}
+
+	return ids, nil
+}
+
 // minFuzzyTermLength is the minimum term length required to apply fuzzy matching.
 // Shorter terms produce too many false-positive matches.
 const minFuzzyTermLength = 4

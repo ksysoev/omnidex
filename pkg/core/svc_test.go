@@ -126,8 +126,8 @@ func TestIngestDocuments_DeleteSuccess(t *testing.T) {
 	svc, store, search, _ := newTestService(t)
 	ctx := t.Context()
 
-	store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/old.md").Return(nil)
 	search.EXPECT().Remove(mock.Anything, "owner/repo/docs/old.md").Return(nil)
+	store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/old.md").Return(nil)
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -154,8 +154,8 @@ func TestIngestDocuments_MixedActions(t *testing.T) {
 	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
 	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
 
-	store.EXPECT().Delete(mock.Anything, "owner/repo", "old.md").Return(nil)
 	search.EXPECT().Remove(mock.Anything, "owner/repo/old.md").Return(nil)
+	store.EXPECT().Delete(mock.Anything, "owner/repo", "old.md").Return(nil)
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -261,19 +261,19 @@ func TestIngestDocuments_DeleteErrors(t *testing.T) {
 		wantErrMsg string
 	}{
 		{
-			name: "store delete error propagates",
-			setupMocks: func(store *MockdocStore, _ *MocksearchEngine) {
-				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(errors.New("delete failed"))
-			},
-			wantErrMsg: "delete failed",
-		},
-		{
 			name: "search remove error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine) {
-				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(nil)
+			setupMocks: func(_ *MockdocStore, search *MocksearchEngine) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(errors.New("remove failed"))
 			},
 			wantErrMsg: "remove failed",
+		},
+		{
+			name: "store delete error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine) {
+				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(errors.New("delete failed"))
+			},
+			wantErrMsg: "delete failed",
 		},
 	}
 
@@ -318,9 +318,12 @@ func TestIngestDocuments_SyncDeletesStaleDocuments(t *testing.T) {
 		{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
 	}, nil)
 
-	// Mock deletion of the stale document.
-	store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(nil)
+	// Mock deletion of the stale document (search first, then store).
 	search.EXPECT().Remove(mock.Anything, "owner/repo/stale.md").Return(nil)
+	store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(nil)
+
+	// Mock ListByRepo for orphan cleanup — no orphans remain after deletion.
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/keep.md"}, nil)
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -353,6 +356,9 @@ func TestIngestDocuments_SyncNoStaleDocuments(t *testing.T) {
 	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
 		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md", Title: "Doc", UpdatedAt: now},
 	}, nil)
+
+	// No orphans in search index either.
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -411,27 +417,44 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 			wantErrMsg: "list failed",
 		},
 		{
-			name: "sync delete store error propagates",
-			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, _ *MockmarkdownRenderer) {
-				now := time.Now()
-				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
-					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
-				}, nil)
-				store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(errors.New("delete failed"))
-			},
-			wantErrMsg: "delete failed",
-		},
-		{
 			name: "sync delete search remove error propagates",
 			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
 				now := time.Now()
 				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
 					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
 				}, nil)
-				store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(nil)
 				search.EXPECT().Remove(mock.Anything, "owner/repo/stale.md").Return(errors.New("remove failed"))
 			},
 			wantErrMsg: "remove failed",
+		},
+		{
+			name: "sync delete store error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+				now := time.Now()
+				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
+				}, nil)
+				search.EXPECT().Remove(mock.Anything, "owner/repo/stale.md").Return(nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(errors.New("delete failed"))
+			},
+			wantErrMsg: "delete failed",
+		},
+		{
+			name: "search ListByRepo error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+				store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+				search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(nil, errors.New("list by repo failed"))
+			},
+			wantErrMsg: "list by repo failed",
+		},
+		{
+			name: "orphan search remove error propagates",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+				store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+				search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/orphan.md"}, nil)
+				search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(errors.New("orphan remove failed"))
+			},
+			wantErrMsg: "orphan remove failed",
 		},
 	}
 
@@ -453,6 +476,93 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 			assert.ErrorContains(t, err, tt.wantErrMsg)
 		})
 	}
+}
+
+func TestIngestDocuments_SyncCleansOrphanedSearchEntries(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	// No documents in the docstore — everything was already deleted.
+	store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+
+	// But the search index still has an orphaned entry from a previous partial failure.
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/orphan.md"}, nil)
+
+	// Expect the orphaned entry to be removed from the search index.
+	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: nil,
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.Indexed)
+	assert.Equal(t, 1, resp.Deleted)
+}
+
+func TestIngestDocuments_SyncOrphanCleanupSkipsValidDocs(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Keep"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Keep")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Keep")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Keep").Return(nil)
+
+	now := time.Now()
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/keep.md", Repo: "owner/repo", Path: "keep.md", Title: "Keep", UpdatedAt: now},
+	}, nil)
+
+	// Search index has the valid doc plus an orphan.
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(
+		[]string{"owner/repo/keep.md", "owner/repo/orphan.md"}, nil,
+	)
+
+	// Only the orphan should be removed.
+	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "keep.md", Content: content, Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+	assert.Equal(t, 1, resp.Deleted) // 1 orphan cleaned
+}
+
+func TestIngestDocuments_DeleteSearchFailurePreventStoreDelete(t *testing.T) {
+	svc, _, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	// search.Remove fails — store.Delete should NOT be called.
+	search.EXPECT().Remove(mock.Anything, "owner/repo/docs/fail.md").Return(errors.New("search unavailable"))
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: []IngestDocument{
+			{Path: "docs/fail.md", Action: "delete"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "search unavailable")
+	// store.Delete was never called — verified by testify mock expectations.
 }
 
 func TestGetDocument(t *testing.T) {
