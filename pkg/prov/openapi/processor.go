@@ -16,8 +16,8 @@ import (
 
 // Processor implements core.ContentProcessor for OpenAPI specifications.
 // It uses kin-openapi to parse specs and extract structured information for
-// search indexing and title extraction. HTML rendering returns the raw spec
-// wrapped in metadata that the view layer uses to initialise Swagger UI.
+// search indexing and title extraction. HTML rendering returns the parsed spec
+// marshaled to JSON for consumption by Swagger UI.
 type Processor struct{}
 
 // New creates a new OpenAPI Processor.

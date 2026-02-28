@@ -142,17 +142,53 @@ paths: {}`,
 
 	req := BuildIngestRequest("owner/repo", "sha", files, false)
 
-	assert.Len(t, req.Documents, 3)
+	// config.yaml is not OpenAPI, so it should be skipped entirely.
+	assert.Len(t, req.Documents, 2)
 
-	// Sorted: api/petstore.yaml, config.yaml, docs/readme.md
+	// Sorted: api/petstore.yaml, docs/readme.md (config.yaml filtered out)
 	assert.Equal(t, "api/petstore.yaml", req.Documents[0].Path)
 	assert.Equal(t, core.ContentTypeOpenAPI, req.Documents[0].ContentType)
 
-	assert.Equal(t, "config.yaml", req.Documents[1].Path)
-	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType, "YAML without openapi key should be markdown")
+	assert.Equal(t, "docs/readme.md", req.Documents[1].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType)
+}
 
-	assert.Equal(t, "docs/readme.md", req.Documents[2].Path)
-	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[2].ContentType)
+func TestBuildIngestRequest_DetectsSwagger2(t *testing.T) {
+	files := map[string]string{
+		"api/legacy.yaml": `swagger: "2.0"
+info:
+  title: Legacy API
+  version: "1.0.0"
+basePath: /v1
+paths: {}`,
+		"docs/readme.md": "# Hello",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
+
+	assert.Len(t, req.Documents, 2)
+
+	assert.Equal(t, "api/legacy.yaml", req.Documents[0].Path)
+	assert.Equal(t, core.ContentTypeOpenAPI, req.Documents[0].ContentType)
+
+	assert.Equal(t, "docs/readme.md", req.Documents[1].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType)
+}
+
+func TestBuildIngestRequest_SkipsNonOpenAPIYAML(t *testing.T) {
+	files := map[string]string{
+		"config.yaml":        "name: my-app\nversion: 1.0.0",
+		"settings.json":      `{"debug": true}`,
+		"docs/readme.md":     "# Hello",
+		"docker-compose.yml": "version: '3'\nservices: {}",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
+
+	// Only the markdown file should remain; all YAML/JSON without OpenAPI keys are skipped.
+	assert.Len(t, req.Documents, 1)
+	assert.Equal(t, "docs/readme.md", req.Documents[0].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[0].ContentType)
 }
 
 func TestSendIngestRequest_Success(t *testing.T) {

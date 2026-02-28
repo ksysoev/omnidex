@@ -792,6 +792,35 @@ func TestNew_PanicsOnMissingMarkdownProcessor(t *testing.T) {
 	})
 }
 
+func TestIngestDocuments_UnknownContentTypeNormalizesToMarkdown(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Hello"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Hello")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Hello")
+
+	store.EXPECT().Save(mock.Anything, mock.MatchedBy(func(doc Document) bool {
+		// The unknown content type should be normalized to markdown before persisting.
+		return doc.ContentType == ContentTypeMarkdown
+	})).Return(nil)
+
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Hello").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert", ContentType: "unknown-type"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Indexed)
+}
+
 func TestSearchDocs(t *testing.T) {
 	tests := []struct {
 		setupMocks  func(*MocksearchEngine)

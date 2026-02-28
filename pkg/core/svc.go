@@ -260,6 +260,13 @@ func (s *Service) upsertDocument(ctx context.Context, repo, commitSHA string, in
 		ct = ContentTypeMarkdown
 	}
 
+	// Normalize unknown content types to markdown so the persisted value always
+	// matches a registered processor and remains consistent with how it will be
+	// rendered and indexed.
+	if _, known := s.processors[ct]; !known {
+		ct = ContentTypeMarkdown
+	}
+
 	processor := s.getProcessor(ct)
 
 	title := processor.ExtractTitle([]byte(ingestDoc.Content))

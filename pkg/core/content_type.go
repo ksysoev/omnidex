@@ -17,8 +17,10 @@ var openAPIExtensions = map[string]bool{
 
 // DetectContentType determines the content type of a document based on its
 // file path and content. It uses file extension as a fast pre-filter and then
-// inspects the content for OpenAPI-specific markers (the "openapi" top-level key).
-// Documents that do not match OpenAPI heuristics default to markdown.
+// inspects the content for OpenAPI-specific markers (the "openapi" or "swagger"
+// top-level keys). Files with non-YAML/JSON extensions are treated as markdown.
+// YAML/JSON files that do not match OpenAPI heuristics return an empty ContentType
+// to signal that they should be skipped (not treated as documentation).
 func DetectContentType(path string, content []byte) ContentType {
 	ext := strings.ToLower(filepath.Ext(path))
 
@@ -31,12 +33,13 @@ func DetectContentType(path string, content []byte) ContentType {
 		return ContentTypeOpenAPI
 	}
 
-	return ContentTypeMarkdown
+	// Arbitrary YAML/JSON files that are not OpenAPI specs should not be
+	// treated as documentation. Return empty to signal the caller to skip.
+	return ""
 }
 
-// looksLikeOpenAPI checks whether the content contains an "openapi" top-level
-// key, which is required by the OpenAPI 3.x specification. It supports both
-// JSON and YAML formats.
+// looksLikeOpenAPI checks whether the content contains an "openapi" (OAS 3.x)
+// or "swagger" (OAS 2.0) top-level key. It supports both JSON and YAML formats.
 func looksLikeOpenAPI(content []byte, ext string) bool {
 	// Try JSON first if the extension suggests it or the content starts with '{'.
 	if ext == ".json" || (len(content) > 0 && content[0] == '{') {
@@ -46,7 +49,7 @@ func looksLikeOpenAPI(content []byte, ext string) bool {
 	return looksLikeOpenAPIYAML(content)
 }
 
-// looksLikeOpenAPIJSON performs a lightweight check for the "openapi" key in JSON content.
+// looksLikeOpenAPIJSON performs a lightweight check for the "openapi" or "swagger" key in JSON content.
 func looksLikeOpenAPIJSON(content []byte) bool {
 	var doc map[string]json.RawMessage
 
@@ -55,11 +58,12 @@ func looksLikeOpenAPIJSON(content []byte) bool {
 	}
 
 	_, hasOpenAPI := doc["openapi"]
+	_, hasSwagger := doc["swagger"]
 
-	return hasOpenAPI
+	return hasOpenAPI || hasSwagger
 }
 
-// looksLikeOpenAPIYAML performs a lightweight check for the "openapi" key in YAML content.
+// looksLikeOpenAPIYAML performs a lightweight check for the "openapi" or "swagger" key in YAML content.
 func looksLikeOpenAPIYAML(content []byte) bool {
 	var doc map[string]any
 
@@ -68,6 +72,7 @@ func looksLikeOpenAPIYAML(content []byte) bool {
 	}
 
 	_, hasOpenAPI := doc["openapi"]
+	_, hasSwagger := doc["swagger"]
 
-	return hasOpenAPI
+	return hasOpenAPI || hasSwagger
 }

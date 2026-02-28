@@ -52,29 +52,29 @@ paths: {}`,
 			expected: ContentTypeOpenAPI,
 		},
 		{
-			name: "YAML file without openapi key defaults to markdown",
+			name: "YAML file without openapi key returns empty",
 			path: "config.yaml",
 			content: `name: my-app
 version: 1.0.0`,
-			expected: ContentTypeMarkdown,
+			expected: "",
 		},
 		{
-			name:     "JSON file without openapi key defaults to markdown",
+			name:     "JSON file without openapi key returns empty",
 			path:     "config.json",
 			content:  `{"name": "my-app", "version": "1.0.0"}`,
-			expected: ContentTypeMarkdown,
+			expected: "",
 		},
 		{
-			name:     "YAML file with invalid YAML defaults to markdown",
+			name:     "YAML file with invalid YAML returns empty",
 			path:     "broken.yaml",
 			content:  `: invalid yaml [[[`,
-			expected: ContentTypeMarkdown,
+			expected: "",
 		},
 		{
-			name:     "JSON file with invalid JSON defaults to markdown",
+			name:     "JSON file with invalid JSON returns empty",
 			path:     "broken.json",
 			content:  `{not valid json}`,
-			expected: ContentTypeMarkdown,
+			expected: "",
 		},
 		{
 			name:     "uppercase extension handled",
@@ -87,6 +87,32 @@ version: 1.0.0`,
 			path:     "notes.txt",
 			content:  `openapi: "3.0.3"`,
 			expected: ContentTypeMarkdown,
+		},
+		{
+			name: "Swagger 2.0 YAML spec detected as OpenAPI",
+			path: "api/legacy.yaml",
+			content: `swagger: "2.0"
+info:
+  title: Legacy API
+  version: "1.0.0"
+basePath: /v1
+paths: {}`,
+			expected: ContentTypeOpenAPI,
+		},
+		{
+			name:     "Swagger 2.0 JSON spec detected as OpenAPI",
+			path:     "api/legacy.json",
+			content:  `{"swagger": "2.0", "info": {"title": "Legacy API", "version": "1.0.0"}, "basePath": "/v1", "paths": {}}`,
+			expected: ContentTypeOpenAPI,
+		},
+		{
+			name: "Swagger 2.0 YML spec detected as OpenAPI",
+			path: "api/legacy.yml",
+			content: `swagger: "2.0"
+info:
+  title: Legacy API
+  version: "1.0.0"`,
+			expected: ContentTypeOpenAPI,
 		},
 	}
 
