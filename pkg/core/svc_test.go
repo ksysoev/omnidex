@@ -13,15 +13,17 @@ import (
 )
 
 // newTestService creates a Service with fresh mocks for each test.
-func newTestService(t *testing.T) (*Service, *MockdocStore, *MocksearchEngine, *MockmarkdownRenderer) {
+func newTestService(t *testing.T) (*Service, *MockdocStore, *MocksearchEngine, *MockContentProcessor) {
 	t.Helper()
 
 	store := NewMockdocStore(t)
 	search := NewMocksearchEngine(t)
-	renderer := NewMockmarkdownRenderer(t)
-	svc := New(store, search, renderer)
+	processor := NewMockContentProcessor(t)
+	svc := New(store, search, map[ContentType]ContentProcessor{
+		ContentTypeMarkdown: processor,
+	})
 
-	return svc, store, search, renderer
+	return svc, store, search, processor
 }
 
 // newTestServiceOnly creates a Service with fresh mocks, returning only the Service.
@@ -30,9 +32,11 @@ func newTestServiceOnly(t *testing.T) *Service {
 
 	store := NewMockdocStore(t)
 	search := NewMocksearchEngine(t)
-	renderer := NewMockmarkdownRenderer(t)
+	processor := NewMockContentProcessor(t)
 
-	return New(store, search, renderer)
+	return New(store, search, map[ContentType]ContentProcessor{
+		ContentTypeMarkdown: processor,
+	})
 }
 
 func TestIngestDocuments_UpsertSuccess(t *testing.T) {
@@ -209,12 +213,12 @@ func TestIngestDocuments_EmptyDocuments(t *testing.T) {
 func TestIngestDocuments_UpsertErrors(t *testing.T) {
 	tests := []struct {
 		name       string
-		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockContentProcessor)
 		wantErrMsg string
 	}{
 		{
 			name: "store save error propagates",
-			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, renderer *MockContentProcessor) {
 				renderer.EXPECT().ExtractTitle(mock.Anything).Return("Title")
 				store.EXPECT().Save(mock.Anything, mock.Anything).Return(errors.New("db connection lost"))
 			},
@@ -222,7 +226,7 @@ func TestIngestDocuments_UpsertErrors(t *testing.T) {
 		},
 		{
 			name: "search index error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockContentProcessor) {
 				renderer.EXPECT().ExtractTitle(mock.Anything).Return("Title")
 				renderer.EXPECT().ToPlainText(mock.Anything).Return("plain")
 				store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
@@ -257,19 +261,19 @@ func TestIngestDocuments_UpsertErrors(t *testing.T) {
 func TestIngestDocuments_DeleteErrors(t *testing.T) {
 	tests := []struct {
 		name       string
-		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockContentProcessor)
 		wantErrMsg string
 	}{
 		{
 			name: "search remove error propagates",
-			setupMocks: func(_ *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(_ *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(errors.New("remove failed"))
 			},
 			wantErrMsg: "remove failed",
 		},
 		{
 			name: "store delete error propagates with compensating re-index",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockContentProcessor) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(nil)
 				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(errors.New("delete failed"))
 				// Compensating action: re-index the document that's still in the store.
@@ -413,19 +417,19 @@ func TestIngestDocuments_SyncDisabledDoesNotDelete(t *testing.T) {
 func TestIngestDocuments_SyncErrors(t *testing.T) {
 	tests := []struct {
 		name       string
-		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockContentProcessor)
 		wantErrMsg string
 	}{
 		{
 			name: "store list error propagates",
-			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, _ *MocksearchEngine, _ *MockContentProcessor) {
 				store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, errors.New("list failed"))
 			},
 			wantErrMsg: "list failed",
 		},
 		{
 			name: "sync delete search remove error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
 				now := time.Now()
 				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
 					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
@@ -436,7 +440,7 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 		},
 		{
 			name: "sync delete store error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockContentProcessor) {
 				now := time.Now()
 				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
 					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
@@ -455,7 +459,7 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 		},
 		{
 			name: "search ListByRepo error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
 				store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
 				search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(nil, errors.New("list by repo failed"))
 			},
@@ -463,7 +467,7 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 		},
 		{
 			name: "orphan search remove error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
 				store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
 				search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/orphan.md"}, nil)
 				search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(errors.New("orphan remove failed"))
@@ -581,12 +585,12 @@ func TestIngestDocuments_DeleteSearchFailurePreventStoreDelete(t *testing.T) {
 
 func TestDeleteDocument_CompensatingReindexOnStoreFailure(t *testing.T) {
 	tests := []struct {
-		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockContentProcessor)
 		name       string
 	}{
 		{
 			name: "successful compensating re-index",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockContentProcessor) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/doc.md").Return(nil)
 				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/doc.md").Return(errors.New("disk full"))
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/doc.md").Return(Document{
@@ -599,7 +603,7 @@ func TestDeleteDocument_CompensatingReindexOnStoreFailure(t *testing.T) {
 		},
 		{
 			name: "compensating re-index fails on store.Get",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/doc.md").Return(nil)
 				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/doc.md").Return(errors.New("disk full"))
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/doc.md").Return(Document{}, errors.New("also broken"))
@@ -607,7 +611,7 @@ func TestDeleteDocument_CompensatingReindexOnStoreFailure(t *testing.T) {
 		},
 		{
 			name: "compensating re-index fails on search.Index",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockContentProcessor) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/doc.md").Return(nil)
 				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/doc.md").Return(errors.New("disk full"))
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/doc.md").Return(Document{
@@ -678,7 +682,7 @@ func TestGetDocument(t *testing.T) {
 
 	tests := []struct {
 		wantDoc      Document
-		setupMocks   func(*MockdocStore, *MockmarkdownRenderer)
+		setupMocks   func(*MockdocStore, *MockContentProcessor)
 		name         string
 		wantErr      string
 		wantHTML     []byte
@@ -686,7 +690,7 @@ func TestGetDocument(t *testing.T) {
 	}{
 		{
 			name: "success",
-			setupMocks: func(store *MockdocStore, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, renderer *MockContentProcessor) {
 				doc := Document{
 					ID:        "owner/repo/docs/guide.md",
 					Repo:      "owner/repo",
@@ -697,7 +701,7 @@ func TestGetDocument(t *testing.T) {
 					UpdatedAt: now,
 				}
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/guide.md").Return(doc, nil)
-				renderer.EXPECT().ToHTMLWithHeadings([]byte("# Guide\nContent here")).Return(
+				renderer.EXPECT().RenderHTML([]byte("# Guide\nContent here")).Return(
 					[]byte("<h1>Guide</h1><p>Content here</p>"),
 					[]Heading{{Level: 1, ID: "guide", Text: "Guide"}},
 					nil,
@@ -717,20 +721,20 @@ func TestGetDocument(t *testing.T) {
 		},
 		{
 			name: "store get error propagates",
-			setupMocks: func(store *MockdocStore, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, _ *MockContentProcessor) {
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/missing.md").Return(Document{}, errors.New("not found"))
 			},
 			wantErr: "not found",
 		},
 		{
 			name: "renderer toHTML error propagates",
-			setupMocks: func(store *MockdocStore, renderer *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, renderer *MockContentProcessor) {
 				doc := Document{
 					ID:      "owner/repo/docs/bad.md",
 					Content: "bad content",
 				}
 				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/bad.md").Return(doc, nil)
-				renderer.EXPECT().ToHTMLWithHeadings([]byte("bad content")).Return(nil, nil, errors.New("render error"))
+				renderer.EXPECT().RenderHTML([]byte("bad content")).Return(nil, nil, errors.New("render error"))
 			},
 			wantErr: "render error",
 		},

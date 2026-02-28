@@ -36,6 +36,8 @@ services:
       - http://omnidex:8080
       - --docs-path
       - /docs
+      - --file-pattern
+      - "**/*.{md,yaml,yml,json}"
       - --repo
       - omnidex/omnidex
       - --commit-sha

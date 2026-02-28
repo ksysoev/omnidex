@@ -26,27 +26,45 @@ type searchEngine interface {
 	ListByRepo(ctx context.Context, repo string) ([]string, error)
 }
 
-// markdownRenderer defines the interface for markdown processing used by Service.
-type markdownRenderer interface {
-	ToHTMLWithHeadings(src []byte) ([]byte, []Heading, error)
+// ContentProcessor handles rendering and indexing for a specific content type.
+type ContentProcessor interface {
+	// RenderHTML converts raw content to displayable HTML with extracted headings.
+	RenderHTML(src []byte) ([]byte, []Heading, error)
+	// ExtractTitle returns a human-readable title from the content.
 	ExtractTitle(src []byte) string
+	// ToPlainText converts content to plain text for search indexing.
 	ToPlainText(src []byte) string
 }
 
 // Service encapsulates core business logic and dependencies.
 type Service struct {
-	store    docStore
-	search   searchEngine
-	renderer markdownRenderer
+	store      docStore
+	search     searchEngine
+	processors map[ContentType]ContentProcessor
 }
 
 // New creates a new Service instance with the provided dependencies.
-func New(store docStore, search searchEngine, renderer markdownRenderer) *Service {
+// The processors map must contain at least a ContentTypeMarkdown entry.
+func New(store docStore, search searchEngine, processors map[ContentType]ContentProcessor) *Service {
 	return &Service{
-		store:    store,
-		search:   search,
-		renderer: renderer,
+		store:      store,
+		search:     search,
+		processors: processors,
 	}
+}
+
+// getProcessor returns the ContentProcessor for the given content type.
+// It falls back to the markdown processor when the content type is empty or unknown.
+func (s *Service) getProcessor(ct ContentType) ContentProcessor {
+	if ct == "" {
+		ct = ContentTypeMarkdown
+	}
+
+	if p, ok := s.processors[ct]; ok {
+		return p
+	}
+
+	return s.processors[ContentTypeMarkdown]
 }
 
 // IngestDocuments processes a batch of document upserts and deletes from a repository.
@@ -178,15 +196,17 @@ func (s *Service) cleanOrphanedSearchEntries(ctx context.Context, repo string, v
 	return cleaned, nil
 }
 
-// GetDocument retrieves a document and renders its markdown content to HTML.
-// It also extracts headings from the markdown source for table of contents navigation.
+// GetDocument retrieves a document and renders its content to HTML using the
+// appropriate content processor. It also extracts headings for table of contents navigation.
 func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document, []byte, []Heading, error) {
 	doc, err := s.store.Get(ctx, repo, path)
 	if err != nil {
 		return Document{}, nil, nil, fmt.Errorf("failed to get document: %w", err)
 	}
 
-	html, headings, err := s.renderer.ToHTMLWithHeadings([]byte(doc.Content))
+	processor := s.getProcessor(doc.ContentType)
+
+	html, headings, err := processor.RenderHTML([]byte(doc.Content))
 	if err != nil {
 		return Document{}, nil, nil, fmt.Errorf("failed to render document: %w", err)
 	}
@@ -225,26 +245,34 @@ func (s *Service) ListDocuments(ctx context.Context, repo string) ([]DocumentMet
 }
 
 func (s *Service) upsertDocument(ctx context.Context, repo, commitSHA string, ingestDoc IngestDocument) error {
-	title := s.renderer.ExtractTitle([]byte(ingestDoc.Content))
+	ct := ingestDoc.ContentType
+	if ct == "" {
+		ct = ContentTypeMarkdown
+	}
+
+	processor := s.getProcessor(ct)
+
+	title := processor.ExtractTitle([]byte(ingestDoc.Content))
 	if title == "" {
 		title = ingestDoc.Path
 	}
 
 	doc := Document{
-		ID:        repo + "/" + ingestDoc.Path,
-		Repo:      repo,
-		Path:      ingestDoc.Path,
-		Title:     title,
-		Content:   ingestDoc.Content,
-		CommitSHA: commitSHA,
-		UpdatedAt: time.Now(),
+		ID:          repo + "/" + ingestDoc.Path,
+		Repo:        repo,
+		Path:        ingestDoc.Path,
+		Title:       title,
+		Content:     ingestDoc.Content,
+		CommitSHA:   commitSHA,
+		UpdatedAt:   time.Now(),
+		ContentType: ct,
 	}
 
 	if err := s.store.Save(ctx, doc); err != nil {
 		return fmt.Errorf("failed to save document: %w", err)
 	}
 
-	plainText := s.renderer.ToPlainText([]byte(ingestDoc.Content))
+	plainText := processor.ToPlainText([]byte(ingestDoc.Content))
 
 	if err := s.search.Index(ctx, doc, plainText); err != nil {
 		return fmt.Errorf("failed to index document: %w", err)
@@ -291,7 +319,8 @@ func (s *Service) reindexForCompensation(ctx context.Context, repo, path string,
 		return
 	}
 
-	plainText := s.renderer.ToPlainText([]byte(doc.Content))
+	processor := s.getProcessor(doc.ContentType)
+	plainText := processor.ToPlainText([]byte(doc.Content))
 
 	if err := s.search.Index(ctx, doc, plainText); err != nil {
 		slog.Warn("compensating re-index: failed to re-index document",

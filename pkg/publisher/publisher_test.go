@@ -101,10 +101,12 @@ func TestBuildIngestRequest(t *testing.T) {
 	assert.Equal(t, "api/readme.md", req.Documents[0].Path)
 	assert.Equal(t, "# API", req.Documents[0].Content)
 	assert.Equal(t, "upsert", req.Documents[0].Action)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[0].ContentType)
 
 	assert.Equal(t, "guide.md", req.Documents[1].Path)
 	assert.Equal(t, "# Guide", req.Documents[1].Content)
 	assert.Equal(t, "upsert", req.Documents[1].Action)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType)
 }
 
 func TestBuildIngestRequest_SyncFalse(t *testing.T) {
@@ -125,6 +127,32 @@ func TestBuildIngestRequest_Empty(t *testing.T) {
 	assert.Equal(t, "owner/repo", req.Repo)
 	assert.True(t, req.Sync)
 	assert.Empty(t, req.Documents)
+}
+
+func TestBuildIngestRequest_DetectsOpenAPI(t *testing.T) {
+	files := map[string]string{
+		"api/petstore.yaml": `openapi: "3.0.3"
+info:
+  title: Petstore API
+  version: "1.0.0"
+paths: {}`,
+		"docs/readme.md": "# Hello",
+		"config.yaml":    "name: my-app\nversion: 1.0.0",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
+
+	assert.Len(t, req.Documents, 3)
+
+	// Sorted: api/petstore.yaml, config.yaml, docs/readme.md
+	assert.Equal(t, "api/petstore.yaml", req.Documents[0].Path)
+	assert.Equal(t, core.ContentTypeOpenAPI, req.Documents[0].ContentType)
+
+	assert.Equal(t, "config.yaml", req.Documents[1].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType, "YAML without openapi key should be markdown")
+
+	assert.Equal(t, "docs/readme.md", req.Documents[2].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[2].ContentType)
 }
 
 func TestSendIngestRequest_Success(t *testing.T) {

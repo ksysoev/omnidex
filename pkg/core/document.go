@@ -2,24 +2,36 @@ package core
 
 import "time"
 
+// ContentType identifies the format of a document's content.
+type ContentType string
+
+const (
+	// ContentTypeMarkdown represents standard markdown documents.
+	ContentTypeMarkdown ContentType = "markdown"
+	// ContentTypeOpenAPI represents OpenAPI specification documents.
+	ContentTypeOpenAPI ContentType = "openapi"
+)
+
 // Document represents a documentation file from a repository.
 type Document struct {
-	UpdatedAt time.Time
-	ID        string
-	Repo      string
-	Path      string
-	Title     string
-	Content   string
-	CommitSHA string
+	UpdatedAt   time.Time
+	ID          string
+	Repo        string
+	Path        string
+	Title       string
+	Content     string
+	CommitSHA   string
+	ContentType ContentType
 }
 
 // DocumentMeta contains metadata about a document without its full content.
 type DocumentMeta struct {
-	UpdatedAt time.Time
-	ID        string
-	Repo      string
-	Path      string
-	Title     string
+	UpdatedAt   time.Time
+	ID          string
+	Repo        string
+	Path        string
+	Title       string
+	ContentType ContentType
 }
 
 // RepoInfo contains metadata about an indexed repository.
@@ -62,9 +74,10 @@ type IngestRequest struct {
 
 // IngestDocument represents a single document in an ingest request.
 type IngestDocument struct {
-	Path    string `json:"path"`
-	Content string `json:"content,omitempty"`
-	Action  string `json:"action"` // "upsert" or "delete"
+	Path        string      `json:"path"`
+	Content     string      `json:"content,omitempty"`
+	Action      string      `json:"action"`                 // "upsert" or "delete"
+	ContentType ContentType `json:"content_type,omitempty"` // defaults to "markdown" when empty
 }
 
 // IngestResponse is returned after processing an ingest request.

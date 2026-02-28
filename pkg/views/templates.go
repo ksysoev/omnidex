@@ -258,6 +258,60 @@ const repoIndexContentBody = `
     {{end}}
 </div>`
 
+// openapiDocContentBody is the document page template for OpenAPI specs rendered via Swagger UI.
+// Swagger UI CSS and JS are loaded from CDN only when an OpenAPI document is displayed (lazy-loading).
+// The spec JSON is embedded inline and fed to SwaggerUI on initialisation.
+const openapiDocContentBody = `
+<div class="flex gap-8">
+    <aside class="w-64 flex-shrink-0 hidden md:block">
+        <nav class="sticky top-8">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{.Doc.Repo}}</h3>
+            <ul class="space-y-1">
+                {{range .NavDocs}}
+                <li>
+                    <a href="/docs/{{.Repo}}/{{.Path}}"
+                       hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
+                       class="block px-3 py-1.5 text-sm rounded-md hover:bg-gray-100 text-gray-700 hover:text-gray-900">
+                        {{.Title}}
+                    </a>
+                </li>
+                {{end}}
+            </ul>
+        </nav>
+    </aside>
+    <article id="doc-content" class="flex-1 min-w-0">
+        <div class="mb-4 text-sm text-gray-500">
+            <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+            <span class="mx-1">/</span>
+            <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
+            <span class="mx-1">/</span>
+            <span>{{.Doc.Path}}</span>
+        </div>
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css" integrity="sha384-Iyc9+PEqaLz+FLuO1WKJiZcJCJuCAYEHitJGZsQ5Mj8LXDYUOagQUo1V2FdBEsU" crossorigin="anonymous">
+            <div id="swagger-ui"></div>
+            <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js" integrity="sha384-cVPyQGVTgCMvRDI1V+3Tn+VXAK7NwYvDBD2tCSqM6HjTEQCRe0PkjNDE0Rka66N" crossorigin="anonymous"></script>
+            <script>
+            (function() {
+                var spec = {{js .HTML}};
+                SwaggerUIBundle({
+                    spec: spec,
+                    dom_id: '#swagger-ui',
+                    presets: [
+                        SwaggerUIBundle.presets.apis,
+                        SwaggerUIBundle.SwaggerUIStandalonePreset
+                    ],
+                    layout: 'BaseLayout',
+                    deepLinking: true,
+                    defaultModelsExpandDepth: 1,
+                    docExpansion: 'list'
+                });
+            })();
+            </script>
+        </div>
+    </article>
+</div>`
+
 // notFoundBody is the 404 page content template.
 const notFoundBody = `
 <div class="text-center py-16">

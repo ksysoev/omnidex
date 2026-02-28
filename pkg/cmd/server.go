@@ -7,6 +7,7 @@ import (
 	"github.com/ksysoev/omnidex/pkg/api"
 	"github.com/ksysoev/omnidex/pkg/core"
 	"github.com/ksysoev/omnidex/pkg/prov/markdown"
+	"github.com/ksysoev/omnidex/pkg/prov/openapi"
 	"github.com/ksysoev/omnidex/pkg/repo/docstore"
 	"github.com/ksysoev/omnidex/pkg/repo/search"
 	"github.com/ksysoev/omnidex/pkg/views"
@@ -41,8 +42,16 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 	// Initialize markdown renderer.
 	renderer := markdown.New()
 
-	// Initialize core service.
-	svc := core.New(store, searchEngine, renderer)
+	// Initialize OpenAPI processor.
+	openapiProcessor := openapi.New()
+
+	// Initialize core service with content processors.
+	processors := map[core.ContentType]core.ContentProcessor{
+		core.ContentTypeMarkdown: renderer,
+		core.ContentTypeOpenAPI:  openapiProcessor,
+	}
+
+	svc := core.New(store, searchEngine, processors)
 
 	// Initialize view renderer.
 	viewRenderer := views.New()

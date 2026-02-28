@@ -11,16 +11,18 @@ import (
 
 // Renderer renders HTML views for the documentation portal.
 type Renderer struct {
-	homeFull         *template.Template
-	homePartial      *template.Template
-	repoIndexFull    *template.Template
-	repoIndexPartial *template.Template
-	docFull          *template.Template
-	docPartial       *template.Template
-	searchFull       *template.Template
-	searchPartial    *template.Template
-	searchResults    *template.Template
-	notFoundFull     *template.Template
+	homeFull          *template.Template
+	homePartial       *template.Template
+	repoIndexFull     *template.Template
+	repoIndexPartial  *template.Template
+	docFull           *template.Template
+	docPartial        *template.Template
+	openapiDocFull    *template.Template
+	openapiDocPartial *template.Template
+	searchFull        *template.Template
+	searchPartial     *template.Template
+	searchResults     *template.Template
+	notFoundFull      *template.Template
 }
 
 // New creates a new view Renderer with all templates parsed.
@@ -30,6 +32,9 @@ func New() *Renderer {
 	funcMap := template.FuncMap{
 		"html": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // trusted content from markdown renderer
+		},
+		"js": func(s string) template.JS {
+			return template.JS(s) //nolint:gosec // trusted JSON from OpenAPI processor
 		},
 		"tocIndent": func(level int) string {
 			switch level {
@@ -44,16 +49,18 @@ func New() *Renderer {
 	}
 
 	return &Renderer{
-		homeFull:         template.Must(template.New("home_full").Funcs(funcMap).Parse(layoutHeader + homeContentBody + layoutFooter)),
-		homePartial:      template.Must(template.New("home_partial").Funcs(funcMap).Parse(homeContentBody)),
-		repoIndexFull:    template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter)),
-		repoIndexPartial: template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody)),
-		docFull:          template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter)),
-		docPartial:       template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody)),
-		searchFull:       template.Must(template.New("search_full").Funcs(funcMap).Parse(layoutHeader + searchContentBody + layoutFooter)),
-		searchPartial:    template.Must(template.New("search_partial").Funcs(funcMap).Parse(searchContentBody)),
-		searchResults:    template.Must(template.New("search_results").Funcs(funcMap).Parse(searchResultsBody)),
-		notFoundFull:     template.Must(template.New("notfound").Funcs(funcMap).Parse(layoutHeader + notFoundBody + layoutFooter)),
+		homeFull:          template.Must(template.New("home_full").Funcs(funcMap).Parse(layoutHeader + homeContentBody + layoutFooter)),
+		homePartial:       template.Must(template.New("home_partial").Funcs(funcMap).Parse(homeContentBody)),
+		repoIndexFull:     template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter)),
+		repoIndexPartial:  template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody)),
+		docFull:           template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter)),
+		docPartial:        template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody)),
+		openapiDocFull:    template.Must(template.New("openapi_doc_full").Funcs(funcMap).Parse(layoutHeader + openapiDocContentBody + layoutFooter)),
+		openapiDocPartial: template.Must(template.New("openapi_doc_partial").Funcs(funcMap).Parse(openapiDocContentBody)),
+		searchFull:        template.Must(template.New("search_full").Funcs(funcMap).Parse(layoutHeader + searchContentBody + layoutFooter)),
+		searchPartial:     template.Must(template.New("search_partial").Funcs(funcMap).Parse(searchContentBody)),
+		searchResults:     template.Must(template.New("search_results").Funcs(funcMap).Parse(searchResultsBody)),
+		notFoundFull:      template.Must(template.New("notfound").Funcs(funcMap).Parse(layoutHeader + notFoundBody + layoutFooter)),
 	}
 }
 
@@ -101,6 +108,7 @@ type docData struct {
 }
 
 // RenderDoc renders a document page with sidebar navigation and table of contents.
+// For OpenAPI documents, it renders the Swagger UI template instead of the markdown prose template.
 func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error { //nolint:gocritic // Document is passed by value for immutability
 	data := docData{
 		Doc:      doc,
@@ -109,12 +117,26 @@ func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headin
 		NavDocs:  navDocs,
 	}
 
-	tmpl := v.docFull
-	if partial {
-		tmpl = v.docPartial
-	}
+	tmpl := v.selectDocTemplate(doc.ContentType, partial)
 
 	return execTemplate(w, tmpl, data)
+}
+
+// selectDocTemplate returns the appropriate template based on content type and partial flag.
+func (v *Renderer) selectDocTemplate(ct core.ContentType, partial bool) *template.Template {
+	if ct == core.ContentTypeOpenAPI {
+		if partial {
+			return v.openapiDocPartial
+		}
+
+		return v.openapiDocFull
+	}
+
+	if partial {
+		return v.docPartial
+	}
+
+	return v.docFull
 }
 
 // searchData is the data passed to the search page template.

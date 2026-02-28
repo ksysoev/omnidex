@@ -177,11 +177,11 @@ func (r *Renderer) ToPlainText(src []byte) string {
 	return strings.TrimSpace(buf.String())
 }
 
-// ToHTMLWithHeadings parses the markdown source once, extracts H1-H3 headings from
+// RenderHTML parses the markdown source once, extracts H1-H3 headings from
 // the AST for table of contents rendering, then renders the AST to sanitized HTML.
 // This avoids the cost of parsing the same source twice compared to calling ToHTML
 // and ExtractHeadings separately.
-func (r *Renderer) ToHTMLWithHeadings(src []byte) ([]byte, []core.Heading, error) {
+func (r *Renderer) RenderHTML(src []byte) ([]byte, []core.Heading, error) {
 	reader := text.NewReader(src)
 	doc := r.md.Parser().Parse(reader)
 

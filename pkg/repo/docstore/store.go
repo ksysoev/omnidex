@@ -35,9 +35,10 @@ type repoMeta struct {
 
 // docMeta holds metadata about a single document stored on disk.
 type docMeta struct {
-	UpdatedAt time.Time `json:"updated_at"`
-	Title     string    `json:"title"`
-	CommitSHA string    `json:"commit_sha"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Title       string    `json:"title"`
+	CommitSHA   string    `json:"commit_sha"`
+	ContentType string    `json:"content_type,omitempty"` // defaults to "markdown" when empty
 }
 
 // Store implements filesystem-based document storage.
@@ -103,9 +104,10 @@ func (s *Store) Save(_ context.Context, doc core.Document) error { //nolint:gocr
 
 	// Write document metadata alongside the content.
 	meta := docMeta{
-		Title:     doc.Title,
-		CommitSHA: doc.CommitSHA,
-		UpdatedAt: doc.UpdatedAt,
+		Title:       doc.Title,
+		CommitSHA:   doc.CommitSHA,
+		UpdatedAt:   doc.UpdatedAt,
+		ContentType: string(doc.ContentType),
 	}
 
 	metaPath := docPath + ".meta.json"
@@ -148,14 +150,20 @@ func (s *Store) Get(_ context.Context, repo, path string) (core.Document, error)
 		return core.Document{}, err
 	}
 
+	ct := core.ContentType(meta.ContentType)
+	if ct == "" {
+		ct = core.ContentTypeMarkdown
+	}
+
 	return core.Document{
-		ID:        repo + "/" + path,
-		Repo:      repo,
-		Path:      path,
-		Title:     meta.Title,
-		Content:   string(content),
-		CommitSHA: meta.CommitSHA,
-		UpdatedAt: meta.UpdatedAt,
+		ID:          repo + "/" + path,
+		Repo:        repo,
+		Path:        path,
+		Title:       meta.Title,
+		Content:     string(content),
+		CommitSHA:   meta.CommitSHA,
+		UpdatedAt:   meta.UpdatedAt,
+		ContentType: ct,
 	}, nil
 }
 
@@ -220,12 +228,18 @@ func (s *Store) List(_ context.Context, repo string) ([]core.DocumentMeta, error
 			}
 		}
 
+		ct := core.ContentType(meta.ContentType)
+		if ct == "" {
+			ct = core.ContentTypeMarkdown
+		}
+
 		docs = append(docs, core.DocumentMeta{
-			ID:        repo + "/" + relPath,
-			Repo:      repo,
-			Path:      relPath,
-			Title:     meta.Title,
-			UpdatedAt: meta.UpdatedAt,
+			ID:          repo + "/" + relPath,
+			Repo:        repo,
+			Path:        relPath,
+			Title:       meta.Title,
+			UpdatedAt:   meta.UpdatedAt,
+			ContentType: ct,
 		})
 
 		return nil

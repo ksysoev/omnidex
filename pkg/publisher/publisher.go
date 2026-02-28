@@ -142,10 +142,13 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, sync bo
 	sort.Strings(paths)
 
 	for _, p := range paths {
+		ct := core.DetectContentType(p, []byte(files[p]))
+
 		documents = append(documents, core.IngestDocument{
-			Path:    p,
-			Content: files[p],
-			Action:  "upsert",
+			Path:        p,
+			Content:     files[p],
+			Action:      "upsert",
+			ContentType: ct,
 		})
 	}
 
