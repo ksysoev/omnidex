@@ -133,11 +133,11 @@ func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, 
 	// previous deletion removed a document from the docstore but failed to
 	// remove it from the search index.
 	orphaned, err := s.cleanOrphanedSearchEntries(ctx, req.Repo, requestPaths)
+	deleted += orphaned
+
 	if err != nil {
 		return deleted, err
 	}
-
-	deleted += orphaned
 
 	return deleted, nil
 }

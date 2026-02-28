@@ -565,6 +565,36 @@ func TestIngestDocuments_DeleteSearchFailurePreventStoreDelete(t *testing.T) {
 	// store.Delete was never called — verified by testify mock expectations.
 }
 
+func TestSyncDeleteStale_PartialOrphanCleanupPreservesCount(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	// No stale documents in the docstore.
+	store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+
+	// Search index has two orphaned entries.
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(
+		[]string{"owner/repo/orphan1.md", "owner/repo/orphan2.md"}, nil,
+	)
+
+	// First orphan removal succeeds, second fails.
+	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan1.md").Return(nil)
+	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan2.md").Return(errors.New("remove failed"))
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: nil,
+	}
+
+	deleted, err := svc.syncDeleteStale(ctx, req)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "remove failed")
+	// The one successful orphan removal must be reflected in the count.
+	assert.Equal(t, 1, deleted)
+}
+
 func TestGetDocument(t *testing.T) {
 	now := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
 
