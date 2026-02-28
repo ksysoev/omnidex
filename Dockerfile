@@ -13,8 +13,10 @@ ARG VERSION=${VERSION}
 
 WORKDIR /app
 
-COPY . .
+COPY go.mod go.sum ./
 RUN go mod download
+
+COPY . .
 
 RUN CGO_ENABLED=0 go build -o omnidex -ldflags "-X main.version=$VERSION -X main.name=omnidex" ./cmd/omnidex/main.go
 
