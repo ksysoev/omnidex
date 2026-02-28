@@ -263,8 +263,50 @@ func (s *Service) deleteDocument(ctx context.Context, repo, path string) error {
 	}
 
 	if err := s.store.Delete(ctx, repo, path); err != nil {
+		// Best-effort compensating action: re-index the document so the search
+		// index stays consistent with the docstore that still holds the document.
+		s.reindexForCompensation(ctx, repo, path, err)
+
 		return fmt.Errorf("failed to delete document: %w", err)
 	}
 
 	return nil
+}
+
+// reindexForCompensation attempts to re-add a document to the search index
+// after a docstore delete failure left the document in the store but missing
+// from the index. Errors are logged but not propagated because this is a
+// best-effort repair; the next sync run will correct any remaining
+// inconsistency.
+func (s *Service) reindexForCompensation(ctx context.Context, repo, path string, deleteErr error) {
+	doc, err := s.store.Get(ctx, repo, path)
+	if err != nil {
+		slog.Warn("compensating re-index: failed to fetch document from store",
+			"repo", repo,
+			"path", path,
+			"deleteErr", deleteErr,
+			"getErr", err,
+		)
+
+		return
+	}
+
+	plainText := s.renderer.ToPlainText([]byte(doc.Content))
+
+	if err := s.search.Index(ctx, doc, plainText); err != nil {
+		slog.Warn("compensating re-index: failed to re-index document",
+			"repo", repo,
+			"path", path,
+			"deleteErr", deleteErr,
+			"indexErr", err,
+		)
+
+		return
+	}
+
+	slog.Warn("compensating re-index: document re-indexed after docstore delete failure",
+		"repo", repo,
+		"path", path,
+		"deleteErr", deleteErr,
+	)
 }

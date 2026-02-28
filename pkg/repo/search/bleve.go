@@ -153,6 +153,7 @@ func (e *BleveEngine) ListByRepo(_ context.Context, repo string) ([]string, erro
 	for {
 		req := bleve.NewSearchRequestOptions(q, listByRepoPageSize, from, false)
 		req.Fields = []string{}
+		req.SortBy([]string{"_id"})
 
 		result, err := e.index.Search(req)
 		if err != nil {

@@ -257,21 +257,28 @@ func TestIngestDocuments_UpsertErrors(t *testing.T) {
 func TestIngestDocuments_DeleteErrors(t *testing.T) {
 	tests := []struct {
 		name       string
-		setupMocks func(*MockdocStore, *MocksearchEngine)
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
 		wantErrMsg string
 	}{
 		{
 			name: "search remove error propagates",
-			setupMocks: func(_ *MockdocStore, search *MocksearchEngine) {
+			setupMocks: func(_ *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(errors.New("remove failed"))
 			},
 			wantErrMsg: "remove failed",
 		},
 		{
-			name: "store delete error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine) {
+			name: "store delete error propagates with compensating re-index",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
 				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/gone.md").Return(nil)
 				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/gone.md").Return(errors.New("delete failed"))
+				// Compensating action: re-index the document that's still in the store.
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/gone.md").Return(Document{
+					ID: "owner/repo/docs/gone.md", Repo: "owner/repo", Path: "docs/gone.md",
+					Content: "# Gone", Title: "Gone",
+				}, nil)
+				renderer.EXPECT().ToPlainText([]byte("# Gone")).Return("Gone")
+				search.EXPECT().Index(mock.Anything, mock.Anything, "Gone").Return(nil)
 			},
 			wantErrMsg: "delete failed",
 		},
@@ -279,8 +286,8 @@ func TestIngestDocuments_DeleteErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, store, search, _ := newTestService(t)
-			tt.setupMocks(store, search)
+			svc, store, search, renderer := newTestService(t)
+			tt.setupMocks(store, search, renderer)
 
 			req := IngestRequest{
 				Repo:      "owner/repo",
@@ -429,13 +436,20 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 		},
 		{
 			name: "sync delete store error propagates",
-			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
 				now := time.Now()
 				store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
 					{ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md", Title: "Stale", UpdatedAt: now},
 				}, nil)
 				search.EXPECT().Remove(mock.Anything, "owner/repo/stale.md").Return(nil)
 				store.EXPECT().Delete(mock.Anything, "owner/repo", "stale.md").Return(errors.New("delete failed"))
+				// Compensating action: re-index the document that's still in the store.
+				store.EXPECT().Get(mock.Anything, "owner/repo", "stale.md").Return(Document{
+					ID: "owner/repo/stale.md", Repo: "owner/repo", Path: "stale.md",
+					Content: "# Stale", Title: "Stale",
+				}, nil)
+				renderer.EXPECT().ToPlainText([]byte("# Stale")).Return("Stale")
+				search.EXPECT().Index(mock.Anything, mock.Anything, "Stale").Return(nil)
 			},
 			wantErrMsg: "delete failed",
 		},
@@ -563,6 +577,70 @@ func TestIngestDocuments_DeleteSearchFailurePreventStoreDelete(t *testing.T) {
 	assert.Nil(t, resp)
 	assert.ErrorContains(t, err, "search unavailable")
 	// store.Delete was never called — verified by testify mock expectations.
+}
+
+func TestDeleteDocument_CompensatingReindexOnStoreFailure(t *testing.T) {
+	tests := []struct {
+		setupMocks func(*MockdocStore, *MocksearchEngine, *MockmarkdownRenderer)
+		name       string
+	}{
+		{
+			name: "successful compensating re-index",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/doc.md").Return(nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/doc.md").Return(errors.New("disk full"))
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/doc.md").Return(Document{
+					ID: "owner/repo/docs/doc.md", Repo: "owner/repo", Path: "docs/doc.md",
+					Content: "# Doc", Title: "Doc",
+				}, nil)
+				renderer.EXPECT().ToPlainText([]byte("# Doc")).Return("Doc")
+				search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+			},
+		},
+		{
+			name: "compensating re-index fails on store.Get",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockmarkdownRenderer) {
+				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/doc.md").Return(nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/doc.md").Return(errors.New("disk full"))
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/doc.md").Return(Document{}, errors.New("also broken"))
+			},
+		},
+		{
+			name: "compensating re-index fails on search.Index",
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockmarkdownRenderer) {
+				search.EXPECT().Remove(mock.Anything, "owner/repo/docs/doc.md").Return(nil)
+				store.EXPECT().Delete(mock.Anything, "owner/repo", "docs/doc.md").Return(errors.New("disk full"))
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/doc.md").Return(Document{
+					ID: "owner/repo/docs/doc.md", Repo: "owner/repo", Path: "docs/doc.md",
+					Content: "# Doc", Title: "Doc",
+				}, nil)
+				renderer.EXPECT().ToPlainText([]byte("# Doc")).Return("Doc")
+				search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(errors.New("index broken"))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, store, search, renderer := newTestService(t)
+			tt.setupMocks(store, search, renderer)
+
+			req := IngestRequest{
+				Repo:      "owner/repo",
+				CommitSHA: "abc",
+				Documents: []IngestDocument{
+					{Path: "docs/doc.md", Action: "delete"},
+				},
+			}
+
+			resp, err := svc.IngestDocuments(t.Context(), req)
+			require.Error(t, err)
+			assert.Nil(t, resp)
+			// The original delete error is always returned regardless of
+			// compensating action outcome.
+			assert.ErrorContains(t, err, "disk full")
+		})
+	}
 }
 
 func TestSyncDeleteStale_PartialOrphanCleanupPreservesCount(t *testing.T) {
