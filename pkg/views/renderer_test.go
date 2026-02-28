@@ -380,10 +380,9 @@ func TestRenderDoc_OpenAPI_FullPage(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "<!DOCTYPE html>")
-	assert.Contains(t, output, "swagger-ui")
-	assert.Contains(t, output, "SwaggerUIBundle")
-	assert.Contains(t, output, "swagger-ui-bundle.js")
-	assert.Contains(t, output, "swagger-ui.css")
+	assert.Contains(t, output, "scalar-api-reference")
+	assert.Contains(t, output, "Scalar.createApiReference")
+	assert.Contains(t, output, "@scalar/api-reference")
 	assert.Contains(t, output, "Petstore API")
 	assert.NotContains(t, output, "On this page", "OpenAPI docs should not show markdown TOC")
 }
@@ -452,8 +451,8 @@ func TestRenderDoc_OpenAPI_Partial(t *testing.T) {
 
 	output := buf.String()
 	assert.NotContains(t, output, "<!DOCTYPE html>")
-	assert.Contains(t, output, "swagger-ui")
-	assert.Contains(t, output, "SwaggerUIBundle")
+	assert.Contains(t, output, "scalar-api-reference")
+	assert.Contains(t, output, "Scalar.createApiReference")
 }
 
 func TestRenderDoc_MarkdownDefault_WhenContentTypeEmpty(t *testing.T) {
@@ -475,5 +474,5 @@ func TestRenderDoc_MarkdownDefault_WhenContentTypeEmpty(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "prose")
-	assert.NotContains(t, output, "swagger-ui")
+	assert.NotContains(t, output, "scalar-api-reference")
 }

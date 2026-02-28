@@ -258,9 +258,9 @@ const repoIndexContentBody = `
     {{end}}
 </div>`
 
-// openapiDocContentBody is the document page template for OpenAPI specs rendered via Swagger UI.
-// Swagger UI CSS and JS are loaded from CDN only when an OpenAPI document is displayed (lazy-loading).
-// The spec JSON is embedded inline and fed to SwaggerUI on initialisation.
+// openapiDocContentBody is the document page template for OpenAPI specs rendered via Scalar API Reference.
+// The Scalar script is loaded from CDN only when an OpenAPI document is displayed (lazy-loading).
+// The spec JSON is embedded inline and fed to Scalar on initialisation.
 const openapiDocContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
@@ -288,61 +288,58 @@ const openapiDocContentBody = `
             <span>{{.Doc.Path}}</span>
         </div>
         <div class="bg-white rounded-lg border border-gray-200 p-4">
-            <div id="swagger-ui"></div>
+            <div id="scalar-api-reference"></div>
             <script type="application/json" id="openapi-spec">{{safeJS .HTML}}</script>
             <script>
             (function() {
                 var specEl = document.getElementById('openapi-spec');
                 if (!specEl) return;
-                var spec = JSON.parse(specEl.textContent);
+                var spec;
+                try { spec = JSON.parse(specEl.textContent); } catch(e) { return; }
 
-                function ensureSwaggerCssLoaded() {
-                    if (document.querySelector('link[data-swagger-ui-css]')) {
-                        return;
-                    }
-                    var link = document.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css';
-                    link.integrity = 'sha384-WoOxtFhjrhn23jYeguEcSJkYdgSIer0UxZkoMKKEqROW+TDEmHEPwckfxWmZXSIw';
-                    link.crossOrigin = 'anonymous';
-                    link.setAttribute('data-swagger-ui-css', 'true');
-                    document.head.appendChild(link);
-                }
-
-                function initSwagger() {
-                    if (!document.getElementById('swagger-ui')) return;
-                    ensureSwaggerCssLoaded();
-                    window.SwaggerUIBundle({
-                        spec: spec,
-                        dom_id: '#swagger-ui',
-                        presets: [
-                            window.SwaggerUIBundle.presets.apis
-                        ],
-                        layout: 'BaseLayout',
-                        deepLinking: true,
-                        defaultModelsExpandDepth: 1,
-                        docExpansion: 'list'
+                function initScalar() {
+                    var container = document.getElementById('scalar-api-reference');
+                    if (!container) return;
+                    container.innerHTML = '';
+                    Scalar.createApiReference('#scalar-api-reference', {
+                        content: spec,
+                        theme: 'none',
+                        layout: 'modern',
+                        withDefaultFonts: false,
+                        forceDarkModeState: 'light',
+                        hideDarkModeToggle: true,
+                        showSidebar: false,
+                        hideSearch: true,
+                        hideClientButton: true,
+                        hideTestRequestButton: true,
+                        telemetry: false,
+                        showDeveloperTools: 'never'
                     });
                 }
 
-                if (typeof window.SwaggerUIBundle === 'function') {
-                    initSwagger();
+                if (typeof window.Scalar !== 'undefined' && typeof window.Scalar.createApiReference === 'function') {
+                    initScalar();
                     return;
                 }
 
-                var existingScript = document.querySelector('script[data-swagger-ui-bundle]');
+                var existingScript = document.querySelector('script[data-scalar-api-reference]');
                 if (existingScript) {
-                    existingScript.addEventListener('load', initSwagger);
+                    if (existingScript.dataset.loaded === 'true') {
+                        initScalar();
+                    } else {
+                        existingScript.addEventListener('load', initScalar);
+                    }
                     return;
                 }
 
                 var script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js';
-                script.integrity = 'sha384-zx2gjpuecwb2jF6HeevbQlN1lehCRCTzWrUWb+A/yu/u5Pkt28/0Qd1XjsU42sbH';
-                script.crossOrigin = 'anonymous';
+                script.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference';
                 script.async = true;
-                script.setAttribute('data-swagger-ui-bundle', 'true');
-                script.onload = initSwagger;
+                script.setAttribute('data-scalar-api-reference', 'true');
+                script.onload = function() {
+                    script.dataset.loaded = 'true';
+                    initScalar();
+                };
                 document.head.appendChild(script);
             })();
             </script>

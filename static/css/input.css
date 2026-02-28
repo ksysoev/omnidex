@@ -32,3 +32,74 @@
 
 /* TOC scroll spy active state */
 .toc-link.toc-active { color: #1d4ed8; border-left-color: #2563eb; }
+
+/* ========================================================================
+   Scalar API Reference — match Omnidex design language
+   Scalar uses CSS custom properties for theming. We override them to align
+   with the gray/blue palette used across the rest of the portal.
+   ======================================================================== */
+
+/* --- Color palette (light mode only — Omnidex has no dark mode) --- */
+.light-mode {
+  /* Text colors */
+  --scalar-color-1: #111827;           /* gray-900  — headings, primary text */
+  --scalar-color-2: rgba(55, 65, 81, 0.9); /* gray-700  — body text */
+  --scalar-color-3: rgba(107, 114, 128, 0.8); /* gray-500  — muted / tertiary */
+  --scalar-color-accent: #2563eb;      /* blue-600  — links, accents */
+
+  /* Backgrounds */
+  --scalar-background-1: #ffffff;      /* white     — primary surface */
+  --scalar-background-2: #f9fafb;      /* gray-50   — secondary surface */
+  --scalar-background-3: #f3f4f6;      /* gray-100  — tertiary surface */
+  --scalar-background-accent: rgba(37, 99, 235, 0.06); /* blue-600 at 6% */
+
+  /* Borders */
+  --scalar-border-color: #e5e7eb;      /* gray-200 */
+
+  /* Buttons */
+  --scalar-button-1: #2563eb;          /* blue-600  — primary button */
+  --scalar-button-1-hover: #1d4ed8;    /* blue-700  — primary button hover */
+  --scalar-button-1-color: #ffffff;
+
+  /* Shadows */
+  --scalar-shadow-1: 0 1px 3px 0 rgba(0, 0, 0, 0.06);
+  --scalar-shadow-2: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 0 0 1px #e5e7eb;
+}
+
+/* --- Typography — use Omnidex system font stack --- */
+#scalar-api-reference {
+  --scalar-font:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --scalar-font-code:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  /* Border radii — match Omnidex rounded-lg */
+  --scalar-radius: 0.375rem;
+  --scalar-radius-lg: 0.5rem;
+  --scalar-radius-xl: 0.75rem;
+
+  --scalar-border-width: 1px;
+}
+
+/* --- Sidebar overrides (hidden, but set for safety) --- */
+.light-mode .sidebar {
+  --scalar-sidebar-background-1: #ffffff;
+  --scalar-sidebar-border-color: #e5e7eb;
+  --scalar-sidebar-color-1: #111827;
+  --scalar-sidebar-color-2: #374151;
+  --scalar-sidebar-color-active: #2563eb;
+  --scalar-sidebar-item-hover-background: #f3f4f6;
+  --scalar-sidebar-item-hover-color: #111827;
+  --scalar-sidebar-item-active-background: #eff6ff;
+  --scalar-sidebar-search-background: #f9fafb;
+  --scalar-sidebar-search-border-color: #d1d5db;
+  --scalar-sidebar-search-color: #6b7280;
+}
+
+/* --- Contain Scalar within its parent card --- */
+#scalar-api-reference {
+  max-width: 100%;
+  overflow: hidden;
+}

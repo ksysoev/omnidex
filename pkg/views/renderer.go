@@ -108,7 +108,7 @@ type docData struct {
 }
 
 // RenderDoc renders a document page with sidebar navigation and table of contents.
-// For OpenAPI documents, it renders the Swagger UI template instead of the markdown prose template.
+// For OpenAPI documents, it renders the Scalar API Reference template instead of the markdown prose template.
 func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error { //nolint:gocritic // Document is passed by value for immutability
 	data := docData{
 		Doc:      doc,
