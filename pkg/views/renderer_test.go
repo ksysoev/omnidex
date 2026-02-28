@@ -2,6 +2,8 @@ package views
 
 import (
 	"bytes"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -384,6 +386,50 @@ func TestRenderDoc_OpenAPI_FullPage(t *testing.T) {
 	assert.Contains(t, output, "swagger-ui.css")
 	assert.Contains(t, output, "Petstore API")
 	assert.NotContains(t, output, "On this page", "OpenAPI docs should not show markdown TOC")
+}
+
+func TestRenderDoc_OpenAPI_SpecJSONNotCorrupted(t *testing.T) {
+	r := New()
+
+	doc := core.Document{
+		ID:          "my-org/repo/petstore.yaml",
+		Repo:        "my-org/repo",
+		Path:        "petstore.yaml",
+		Title:       "Petstore API",
+		ContentType: core.ContentTypeOpenAPI,
+	}
+
+	specJSON := []byte(`{"openapi":"3.0.3","info":{"title":"Petstore API","version":"1.0.0"},"paths":{"/pets":{"get":{"summary":"List pets","responses":{"200":{"description":"OK"}}}}}}`)
+
+	var buf bytes.Buffer
+
+	err := r.RenderDoc(&buf, doc, specJSON, nil, nil, false)
+	require.NoError(t, err)
+
+	output := buf.String()
+
+	// Extract the JSON content between the script tags.
+	const startTag = `<script type="application/json" id="openapi-spec">`
+
+	const endTag = `</script>`
+
+	startIdx := strings.Index(output, startTag)
+	require.NotEqual(t, -1, startIdx, "expected openapi-spec script tag in output")
+
+	startIdx += len(startTag)
+
+	endIdx := strings.Index(output[startIdx:], endTag)
+	require.NotEqual(t, -1, endIdx, "expected closing script tag after openapi-spec")
+
+	embedded := output[startIdx : startIdx+endIdx]
+
+	// The embedded content must be valid JSON — not corrupted by html/template
+	// JavaScript-context escaping (e.g., unicode escape sequences or extra quoting).
+	assert.True(t, json.Valid([]byte(embedded)), "embedded spec must be valid JSON, got: %s", embedded)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(embedded), &parsed))
+	assert.Equal(t, "3.0.3", parsed["openapi"])
 }
 
 func TestRenderDoc_OpenAPI_Partial(t *testing.T) {

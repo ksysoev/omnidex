@@ -5,7 +5,6 @@ package openapi
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -125,6 +124,8 @@ func (p *Processor) ToPlainText(src []byte) string {
 
 // parseSpec parses an OpenAPI spec from raw bytes (YAML or JSON).
 // It uses a lenient loader that does not resolve external references.
+// Semantic validation is intentionally skipped so that Swagger UI can render
+// specs with minor compliance issues and provide its own user-facing feedback.
 func parseSpec(src []byte) (*openapi3.T, error) {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
@@ -132,10 +133,6 @@ func parseSpec(src []byte) (*openapi3.T, error) {
 	spec, err := loader.LoadFromData(src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
-	}
-
-	if err := spec.Validate(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to validate OpenAPI spec: %w", err)
 	}
 
 	return spec, nil

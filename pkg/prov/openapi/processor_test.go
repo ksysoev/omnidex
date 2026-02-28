@@ -108,10 +108,12 @@ func TestProcessor_RenderHTML(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to parse OpenAPI spec")
 	})
 
-	t.Run("semantically invalid spec returns validation error", func(t *testing.T) {
+	t.Run("semantically invalid spec is accepted", func(t *testing.T) {
 		p := New()
-		// Path has {petId} parameter but operation doesn't define it — passes loading but fails validation.
-		invalidSpec := []byte(`openapi: "3.0.3"
+		// Path has {petId} parameter but operation doesn't define it — previously
+		// failed semantic validation, but now passes because we rely on Swagger UI
+		// to surface validation warnings to the user.
+		specWithMissingParam := []byte(`openapi: "3.0.3"
 info:
   title: Bad API
   version: "1.0.0"
@@ -123,10 +125,11 @@ paths:
         "200":
           description: OK`)
 
-		_, _, err := p.RenderHTML(invalidSpec)
+		html, headings, err := p.RenderHTML(specWithMissingParam)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to validate OpenAPI spec")
+		require.NoError(t, err)
+		assert.Empty(t, headings)
+		assert.True(t, json.Valid(html), "output should be valid JSON")
 	})
 }
 
@@ -160,7 +163,7 @@ paths: {}`,
 			expected: "",
 		},
 		{
-			name: "semantically invalid spec returns empty",
+			name: "semantically invalid spec still extracts title",
 			input: `openapi: "3.0.3"
 info:
   title: Bad API
@@ -172,7 +175,7 @@ paths:
       responses:
         "200":
           description: OK`,
-			expected: "",
+			expected: "Bad API",
 		},
 	}
 
@@ -216,7 +219,7 @@ func TestProcessor_ToPlainText(t *testing.T) {
 		assert.Empty(t, text)
 	})
 
-	t.Run("semantically invalid spec returns empty string", func(t *testing.T) {
+	t.Run("semantically invalid spec still extracts text", func(t *testing.T) {
 		p := New()
 		text := p.ToPlainText([]byte(`openapi: "3.0.3"
 info:
@@ -230,7 +233,9 @@ paths:
         "200":
           description: OK`))
 
-		assert.Empty(t, text)
+		assert.Contains(t, text, "Bad API")
+		assert.Contains(t, text, "/items/{itemId}")
+		assert.Contains(t, text, "Get item")
 	})
 
 	t.Run("spec with no paths", func(t *testing.T) {
