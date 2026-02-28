@@ -288,9 +288,9 @@ const openapiDocContentBody = `
             <span>{{.Doc.Path}}</span>
         </div>
         <div class="bg-white rounded-lg border border-gray-200 p-4">
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css" integrity="sha384-Iyc9+PEqaLz+FLuO1WKJiZcJCJuCAYEHitJGZsQ5Mj8LXDYUOagQUo1V2FdBEsU" crossorigin="anonymous">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css" integrity="sha384-WoOxtFhjrhn23jYeguEcSJkYdgSIer0UxZkoMKKEqROW+TDEmHEPwckfxWmZXSIw" crossorigin="anonymous">
             <div id="swagger-ui"></div>
-            <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js" integrity="sha384-cVPyQGVTgCMvRDI1V+3Tn+VXAK7NwYvDBD2tCSqM6HjTEQCRe0PkjNDE0Rka66N" crossorigin="anonymous"></script>
+            <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js" integrity="sha384-zx2gjpuecwb2jF6HeevbQlN1lehCRCTzWrUWb+A/yu/u5Pkt28/0Qd1XjsU42sbH" crossorigin="anonymous"></script>
             <script>
             (function() {
                 var spec = {{js .HTML}};
