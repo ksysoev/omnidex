@@ -5,6 +5,7 @@ package openapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -131,6 +132,10 @@ func parseSpec(src []byte) (*openapi3.T, error) {
 	spec, err := loader.LoadFromData(src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
+	}
+
+	if err := spec.Validate(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to validate OpenAPI spec: %w", err)
 	}
 
 	return spec, nil

@@ -39,6 +39,12 @@ paths:
       operationId: showPetById
       tags:
         - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: A pet
@@ -57,7 +63,12 @@ const minimalSpecJSON = `{
   "paths": {
     "/pets": {
       "get": {
-        "summary": "List all pets"
+        "summary": "List all pets",
+        "responses": {
+          "200": {
+            "description": "A list of pets"
+          }
+        }
       }
     }
   }
@@ -96,6 +107,27 @@ func TestProcessor_RenderHTML(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse OpenAPI spec")
 	})
+
+	t.Run("semantically invalid spec returns validation error", func(t *testing.T) {
+		p := New()
+		// Path has {petId} parameter but operation doesn't define it — passes loading but fails validation.
+		invalidSpec := []byte(`openapi: "3.0.3"
+info:
+  title: Bad API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+      responses:
+        "200":
+          description: OK`)
+
+		_, _, err := p.RenderHTML(invalidSpec)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to validate OpenAPI spec")
+	})
 }
 
 func TestProcessor_ExtractTitle(t *testing.T) {
@@ -125,6 +157,21 @@ paths: {}`,
 		{
 			name:     "invalid content",
 			input:    "not a spec",
+			expected: "",
+		},
+		{
+			name: "semantically invalid spec returns empty",
+			input: `openapi: "3.0.3"
+info:
+  title: Bad API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+      responses:
+        "200":
+          description: OK`,
 			expected: "",
 		},
 	}
@@ -165,6 +212,23 @@ func TestProcessor_ToPlainText(t *testing.T) {
 	t.Run("invalid content returns empty string", func(t *testing.T) {
 		p := New()
 		text := p.ToPlainText([]byte("not a spec"))
+
+		assert.Empty(t, text)
+	})
+
+	t.Run("semantically invalid spec returns empty string", func(t *testing.T) {
+		p := New()
+		text := p.ToPlainText([]byte(`openapi: "3.0.3"
+info:
+  title: Bad API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+      responses:
+        "200":
+          description: OK`))
 
 		assert.Empty(t, text)
 	})
