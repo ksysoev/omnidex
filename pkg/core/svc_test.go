@@ -774,6 +774,24 @@ func TestGetDocument(t *testing.T) {
 	}
 }
 
+func TestNew_PanicsOnNilProcessors(t *testing.T) {
+	store := NewMockdocStore(t)
+	search := NewMocksearchEngine(t)
+
+	assert.PanicsWithValue(t, "processors map must not be nil", func() {
+		New(store, search, nil)
+	})
+}
+
+func TestNew_PanicsOnMissingMarkdownProcessor(t *testing.T) {
+	store := NewMockdocStore(t)
+	search := NewMocksearchEngine(t)
+
+	assert.PanicsWithValue(t, "processors map must contain a ContentTypeMarkdown entry", func() {
+		New(store, search, map[ContentType]ContentProcessor{})
+	})
+}
+
 func TestSearchDocs(t *testing.T) {
 	tests := []struct {
 		setupMocks  func(*MocksearchEngine)

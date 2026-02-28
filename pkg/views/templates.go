@@ -288,24 +288,58 @@ const openapiDocContentBody = `
             <span>{{.Doc.Path}}</span>
         </div>
         <div class="bg-white rounded-lg border border-gray-200 p-4">
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css" integrity="sha384-WoOxtFhjrhn23jYeguEcSJkYdgSIer0UxZkoMKKEqROW+TDEmHEPwckfxWmZXSIw" crossorigin="anonymous">
             <div id="swagger-ui"></div>
-            <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js" integrity="sha384-zx2gjpuecwb2jF6HeevbQlN1lehCRCTzWrUWb+A/yu/u5Pkt28/0Qd1XjsU42sbH" crossorigin="anonymous"></script>
             <script>
             (function() {
                 var spec = {{js .HTML}};
-                SwaggerUIBundle({
-                    spec: spec,
-                    dom_id: '#swagger-ui',
-                    presets: [
-                        SwaggerUIBundle.presets.apis,
-                        SwaggerUIBundle.SwaggerUIStandalonePreset
-                    ],
-                    layout: 'BaseLayout',
-                    deepLinking: true,
-                    defaultModelsExpandDepth: 1,
-                    docExpansion: 'list'
-                });
+
+                function ensureSwaggerCssLoaded() {
+                    if (document.querySelector('link[data-swagger-ui-css]')) {
+                        return;
+                    }
+                    var link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css';
+                    link.integrity = 'sha384-WoOxtFhjrhn23jYeguEcSJkYdgSIer0UxZkoMKKEqROW+TDEmHEPwckfxWmZXSIw';
+                    link.crossOrigin = 'anonymous';
+                    link.setAttribute('data-swagger-ui-css', 'true');
+                    document.head.appendChild(link);
+                }
+
+                function initSwagger() {
+                    ensureSwaggerCssLoaded();
+                    window.SwaggerUIBundle({
+                        spec: spec,
+                        dom_id: '#swagger-ui',
+                        presets: [
+                            window.SwaggerUIBundle.presets.apis
+                        ],
+                        layout: 'BaseLayout',
+                        deepLinking: true,
+                        defaultModelsExpandDepth: 1,
+                        docExpansion: 'list'
+                    });
+                }
+
+                if (typeof window.SwaggerUIBundle === 'function') {
+                    initSwagger();
+                    return;
+                }
+
+                var existingScript = document.querySelector('script[data-swagger-ui-bundle]');
+                if (existingScript) {
+                    existingScript.addEventListener('load', initSwagger);
+                    return;
+                }
+
+                var script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js';
+                script.integrity = 'sha384-zx2gjpuecwb2jF6HeevbQlN1lehCRCTzWrUWb+A/yu/u5Pkt28/0Qd1XjsU42sbH';
+                script.crossOrigin = 'anonymous';
+                script.async = true;
+                script.setAttribute('data-swagger-ui-bundle', 'true');
+                script.onload = initSwagger;
+                document.head.appendChild(script);
             })();
             </script>
         </div>

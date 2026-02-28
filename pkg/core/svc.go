@@ -45,7 +45,17 @@ type Service struct {
 
 // New creates a new Service instance with the provided dependencies.
 // The processors map must contain at least a ContentTypeMarkdown entry.
+// It panics if processors is nil or does not contain a markdown processor,
+// since markdown is the default fallback for unknown content types.
 func New(store docStore, search searchEngine, processors map[ContentType]ContentProcessor) *Service {
+	if processors == nil {
+		panic("processors map must not be nil")
+	}
+
+	if _, ok := processors[ContentTypeMarkdown]; !ok {
+		panic("processors map must contain a ContentTypeMarkdown entry")
+	}
+
 	return &Service{
 		store:      store,
 		search:     search,
