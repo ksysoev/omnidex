@@ -28,7 +28,8 @@ type searchEngine interface {
 
 // ContentProcessor handles rendering and indexing for a specific content type.
 type ContentProcessor interface {
-	// RenderHTML converts raw content to displayable HTML with extracted headings.
+	// RenderHTML converts raw content into bytes consumed by the view layer
+	// (e.g., HTML for markdown, JSON for OpenAPI) and returns any extracted headings.
 	RenderHTML(src []byte) ([]byte, []Heading, error)
 	// ExtractTitle returns a human-readable title from the content.
 	ExtractTitle(src []byte) string

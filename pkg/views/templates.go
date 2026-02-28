@@ -289,9 +289,12 @@ const openapiDocContentBody = `
         </div>
         <div class="bg-white rounded-lg border border-gray-200 p-4">
             <div id="swagger-ui"></div>
+            <script type="application/json" id="openapi-spec">{{html .HTML}}</script>
             <script>
             (function() {
-                var spec = {{js .HTML}};
+                var specEl = document.getElementById('openapi-spec');
+                if (!specEl) return;
+                var spec = JSON.parse(specEl.textContent);
 
                 function ensureSwaggerCssLoaded() {
                     if (document.querySelector('link[data-swagger-ui-css]')) {
@@ -307,6 +310,7 @@ const openapiDocContentBody = `
                 }
 
                 function initSwagger() {
+                    if (!document.getElementById('swagger-ui')) return;
                     ensureSwaggerCssLoaded();
                     window.SwaggerUIBundle({
                         spec: spec,

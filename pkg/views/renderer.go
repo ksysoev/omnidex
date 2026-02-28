@@ -33,9 +33,6 @@ func New() *Renderer {
 		"html": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // trusted content from markdown renderer
 		},
-		"js": func(s string) template.JS {
-			return template.JS(s) //nolint:gosec // trusted JSON from OpenAPI processor
-		},
 		"tocIndent": func(level int) string {
 			switch level {
 			case 2:
