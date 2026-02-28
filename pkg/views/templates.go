@@ -11,7 +11,29 @@ const layoutHeader = `<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11.12.3/dist/mermaid.min.js" integrity="sha384-jFhLSLFn4m565eRAS0CDMWubMqOtfZWWbE8kqgGdU+VHbJ3B2G/4X8u+0BM8MtdU" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <script>
-        if (typeof mermaid !== 'undefined') { mermaid.initialize({startOnLoad: true}); }
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: 'base',
+                themeVariables: {
+                    background: '#f9fafb',
+                    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+                    primaryColor: '#eff6ff',
+                    primaryBorderColor: '#93c5fd',
+                    primaryTextColor: '#1e3a5f',
+                    secondaryColor: '#f3f4f6',
+                    secondaryBorderColor: '#d1d5db',
+                    tertiaryColor: '#f9fafb',
+                    tertiaryBorderColor: '#e5e7eb',
+                    lineColor: '#9ca3af',
+                    textColor: '#374151',
+                    noteBkgColor: '#eff6ff',
+                    noteBorderColor: '#93c5fd',
+                    actorBkg: '#ffffff',
+                    actorBorder: '#d1d5db'
+                }
+            });
+        }
         function initScrollSpy() {
             if (window._tocObserver) {
                 window._tocObserver.disconnect();

@@ -12,7 +12,8 @@
 .prose code { background-color: #f3f4f6; padding: 0.125em 0.25em; border-radius: 0.25em; font-size: 0.875em; }
 .prose pre { background-color: #1f2937; color: #f9fafb; padding: 1em; border-radius: 0.5em; overflow-x: auto; margin-bottom: 1em; }
 .prose pre code { background-color: transparent; padding: 0; }
-.prose pre.mermaid { background-color: transparent; text-align: center; padding: 1em 0; overflow-x: auto; }
+.prose pre.mermaid { background-color: transparent; color: inherit; text-align: center; padding: 1em 0; overflow-x: auto; }
+.prose pre.mermaid svg { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 100%; }
 .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
 .prose ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
 .prose li { margin-bottom: 0.25em; }
