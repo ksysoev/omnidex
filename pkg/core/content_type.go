@@ -41,9 +41,18 @@ func DetectContentType(path string, content []byte) ContentType {
 // looksLikeOpenAPI checks whether the content contains an "openapi" (OAS 3.x)
 // or "swagger" (OAS 2.0) top-level key. It supports both JSON and YAML formats.
 func looksLikeOpenAPI(content []byte, ext string) bool {
-	// Try JSON first if the extension suggests it or the content starts with '{'.
-	if ext == ".json" || (len(content) > 0 && content[0] == '{') {
+	// For .json files, only attempt JSON-based detection.
+	if ext == ".json" {
 		return looksLikeOpenAPIJSON(content)
+	}
+
+	// For YAML files, content may still start with '{' (YAML flow mapping).
+	// In that case, try JSON heuristics first, but fall back to YAML detection
+	// if JSON parsing does not detect an OpenAPI document.
+	if len(content) > 0 && content[0] == '{' {
+		if looksLikeOpenAPIJSON(content) {
+			return true
+		}
 	}
 
 	return looksLikeOpenAPIYAML(content)

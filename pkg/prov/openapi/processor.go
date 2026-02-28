@@ -5,7 +5,6 @@ package openapi
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -133,10 +132,6 @@ func parseSpec(src []byte) (*openapi3.T, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
 	}
-
-	// Validate the spec structure but don't fail on validation errors —
-	// we still want to index partially valid specs.
-	_ = spec.Validate(context.Background())
 
 	return spec, nil
 }

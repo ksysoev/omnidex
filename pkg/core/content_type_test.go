@@ -114,6 +114,18 @@ info:
   version: "1.0.0"`,
 			expected: ContentTypeOpenAPI,
 		},
+		{
+			name:     "YAML flow mapping OpenAPI spec detected correctly",
+			path:     "api/flow.yaml",
+			content:  `{openapi: "3.0.3", info: {title: "Flow API", version: "1.0.0"}, paths: {}}`,
+			expected: ContentTypeOpenAPI,
+		},
+		{
+			name:     "YAML flow mapping non-OpenAPI returns empty",
+			path:     "config.yml",
+			content:  `{name: my-app, version: "1.0.0"}`,
+			expected: "",
+		},
 	}
 
 	for _, tt := range tests {
