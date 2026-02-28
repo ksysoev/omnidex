@@ -134,25 +134,45 @@ func (e *BleveEngine) DocCount() (uint64, error) {
 	return count, nil
 }
 
-// maxListByRepoSize is the upper bound on documents returned by ListByRepo.
-const maxListByRepoSize = 10000
+// listByRepoPageSize is the number of documents fetched per page when listing
+// all documents for a repository. The method paginates until all results are
+// collected so no documents are silently truncated.
+const listByRepoPageSize = 10000
 
 // ListByRepo returns the IDs of all documents in the search index that belong to the given repository.
+// It paginates through results to ensure no documents are silently truncated.
 func (e *BleveEngine) ListByRepo(_ context.Context, repo string) ([]string, error) {
 	q := bleve.NewTermQuery(repo)
 	q.SetField("repo")
 
-	req := bleve.NewSearchRequestOptions(q, maxListByRepoSize, 0, false)
-	req.Fields = []string{}
+	var (
+		from = 0
+		ids  = make([]string, 0, listByRepoPageSize)
+	)
 
-	result, err := e.index.Search(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list documents for repo %s: %w", repo, err)
-	}
+	for {
+		req := bleve.NewSearchRequestOptions(q, listByRepoPageSize, from, false)
+		req.Fields = []string{}
 
-	ids := make([]string, 0, len(result.Hits))
-	for _, hit := range result.Hits {
-		ids = append(ids, hit.ID)
+		result, err := e.index.Search(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list documents for repo %s: %w", repo, err)
+		}
+
+		if len(result.Hits) == 0 {
+			break
+		}
+
+		for _, hit := range result.Hits {
+			ids = append(ids, hit.ID)
+		}
+
+		from += len(result.Hits)
+
+		// Stop if we've collected at least as many documents as Bleve reports in total.
+		if uint64(from) >= result.Total {
+			break
+		}
 	}
 
 	return ids, nil

@@ -116,13 +116,17 @@ func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, 
 			continue
 		}
 
-		slog.InfoContext(ctx, "sync: removing stale document", "repo", req.Repo, "path", doc.Path)
+		slog.DebugContext(ctx, "sync: removing stale document", "repo", req.Repo, "path", doc.Path)
 
 		if err := s.deleteDocument(ctx, req.Repo, doc.Path); err != nil {
 			return deleted, fmt.Errorf("failed to delete stale document %s: %w", doc.Path, err)
 		}
 
 		deleted++
+	}
+
+	if deleted > 0 {
+		slog.InfoContext(ctx, "sync: stale document cleanup complete", "repo", req.Repo, "deleted", deleted)
 	}
 
 	// Clean up orphaned entries in the search index. These can exist when a
@@ -158,13 +162,17 @@ func (s *Service) cleanOrphanedSearchEntries(ctx context.Context, repo string, v
 			continue
 		}
 
-		slog.InfoContext(ctx, "sync: removing orphaned search entry", "repo", repo, "docID", docID)
+		slog.DebugContext(ctx, "sync: removing orphaned search entry", "repo", repo, "docID", docID)
 
 		if err := s.search.Remove(ctx, docID); err != nil {
 			return cleaned, fmt.Errorf("failed to remove orphaned search entry %s: %w", docID, err)
 		}
 
 		cleaned++
+	}
+
+	if cleaned > 0 {
+		slog.InfoContext(ctx, "sync: orphan cleanup complete", "repo", repo, "cleaned", cleaned)
 	}
 
 	return cleaned, nil

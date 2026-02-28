@@ -1,6 +1,7 @@
 package search
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -689,6 +690,44 @@ func TestBleveEngine_ListByRepoEmpty(t *testing.T) {
 	ids, err := engine.ListByRepo(t.Context(), "owner/nonexistent")
 	require.NoError(t, err)
 	assert.Empty(t, ids)
+}
+
+func TestBleveEngine_ListByRepoManyDocuments(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	// Index more documents than a typical single-page fetch to exercise the
+	// collection logic in ListByRepo. While we can't easily exceed the
+	// listByRepoPageSize constant (10k) in a unit test, we validate that all
+	// indexed documents are returned faithfully.
+	const docCount = 50
+
+	expected := make([]string, 0, docCount)
+
+	for i := range docCount {
+		doc := core.Document{
+			ID:        fmt.Sprintf("owner/big-repo/doc-%03d.md", i),
+			Repo:      "owner/big-repo",
+			Path:      fmt.Sprintf("doc-%03d.md", i),
+			Title:     fmt.Sprintf("Doc %d", i),
+			UpdatedAt: time.Now(),
+		}
+
+		err = engine.Index(t.Context(), doc, fmt.Sprintf("Content of document %d", i))
+		require.NoError(t, err)
+
+		expected = append(expected, doc.ID)
+	}
+
+	ids, err := engine.ListByRepo(t.Context(), "owner/big-repo")
+	require.NoError(t, err)
+	assert.Len(t, ids, docCount)
+	assert.ElementsMatch(t, expected, ids)
 }
 
 func TestBleveEngine_ListByRepoAfterRemove(t *testing.T) {
