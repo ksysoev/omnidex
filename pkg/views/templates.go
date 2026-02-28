@@ -303,6 +303,7 @@ const openapiDocContentBody = `
                 }
 
                 function initScalar() {
+                    if (typeof window.Scalar === 'undefined' || typeof window.Scalar.createApiReference !== 'function') return;
                     var container = document.getElementById('scalar-api-reference');
                     if (!container) return;
                     container.innerHTML = '';

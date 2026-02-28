@@ -40,7 +40,7 @@
    ======================================================================== */
 
 /* --- Color palette (light mode only — Omnidex has no dark mode) --- */
-.light-mode {
+#scalar-api-reference .light-mode {
   /* Text colors */
   --scalar-color-1: #111827;           /* gray-900  — headings, primary text */
   --scalar-color-2: rgba(55, 65, 81, 0.9); /* gray-700  — body text */
@@ -84,7 +84,7 @@
 }
 
 /* --- Sidebar overrides (hidden, but set for safety) --- */
-.light-mode .sidebar {
+#scalar-api-reference .light-mode .sidebar {
   --scalar-sidebar-background-1: #ffffff;
   --scalar-sidebar-border-color: #e5e7eb;
   --scalar-sidebar-color-1: #111827;
@@ -101,5 +101,5 @@
 /* --- Contain Scalar within its parent card --- */
 #scalar-api-reference {
   max-width: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
