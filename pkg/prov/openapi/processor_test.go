@@ -1,0 +1,246 @@
+package openapi
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const minimalSpecYAML = `openapi: "3.0.3"
+info:
+  title: Petstore API
+  description: A sample API for pets
+  version: "1.0.0"
+paths:
+  /pets:
+    get:
+      summary: List all pets
+      description: Returns a list of all pets in the store
+      operationId: listPets
+      tags:
+        - pets
+      responses:
+        "200":
+          description: A list of pets
+    post:
+      summary: Create a pet
+      operationId: createPet
+      tags:
+        - pets
+      responses:
+        "201":
+          description: Pet created
+  /pets/{petId}:
+    get:
+      summary: Get a pet by ID
+      description: Returns a single pet
+      operationId: showPetById
+      tags:
+        - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A pet
+tags:
+  - name: pets
+    description: Everything about your Pets
+`
+
+const minimalSpecJSON = `{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Petstore API",
+    "description": "A sample API for pets",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/pets": {
+      "get": {
+        "summary": "List all pets",
+        "responses": {
+          "200": {
+            "description": "A list of pets"
+          }
+        }
+      }
+    }
+  }
+}`
+
+func TestProcessor_RenderHTML(t *testing.T) {
+	t.Run("valid YAML spec returns JSON", func(t *testing.T) {
+		p := New()
+		html, headings, err := p.RenderHTML([]byte(minimalSpecYAML))
+
+		require.NoError(t, err)
+		assert.Empty(t, headings, "OpenAPI specs should not produce headings")
+
+		// The output should be valid JSON.
+		assert.True(t, json.Valid(html), "output should be valid JSON")
+
+		// The JSON should contain key spec fields.
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal(html, &doc))
+		assert.Equal(t, "3.0.3", doc["openapi"])
+	})
+
+	t.Run("valid JSON spec returns JSON", func(t *testing.T) {
+		p := New()
+		html, headings, err := p.RenderHTML([]byte(minimalSpecJSON))
+
+		require.NoError(t, err)
+		assert.Empty(t, headings)
+		assert.True(t, json.Valid(html))
+	})
+
+	t.Run("invalid spec returns error", func(t *testing.T) {
+		p := New()
+		_, _, err := p.RenderHTML([]byte("not a valid spec at all"))
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse OpenAPI spec")
+	})
+
+	t.Run("semantically invalid spec returns validation error", func(t *testing.T) {
+		p := New()
+		// Path has {petId} parameter but operation doesn't define it — passes loading but fails validation.
+		invalidSpec := []byte(`openapi: "3.0.3"
+info:
+  title: Bad API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+      responses:
+        "200":
+          description: OK`)
+
+		_, _, err := p.RenderHTML(invalidSpec)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to validate OpenAPI spec")
+	})
+}
+
+func TestProcessor_ExtractTitle(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "YAML spec with title",
+			input:    minimalSpecYAML,
+			expected: "Petstore API",
+		},
+		{
+			name:     "JSON spec with title",
+			input:    minimalSpecJSON,
+			expected: "Petstore API",
+		},
+		{
+			name: "spec without title",
+			input: `openapi: "3.0.3"
+info:
+  version: "1.0.0"
+paths: {}`,
+			expected: "",
+		},
+		{
+			name:     "invalid content",
+			input:    "not a spec",
+			expected: "",
+		},
+		{
+			name: "semantically invalid spec returns empty",
+			input: `openapi: "3.0.3"
+info:
+  title: Bad API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+      responses:
+        "200":
+          description: OK`,
+			expected: "",
+		},
+	}
+
+	p := New()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := p.ExtractTitle([]byte(tt.input))
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestProcessor_ToPlainText(t *testing.T) {
+	t.Run("extracts searchable text from YAML spec", func(t *testing.T) {
+		p := New()
+		text := p.ToPlainText([]byte(minimalSpecYAML))
+
+		assert.Contains(t, text, "Petstore API")
+		assert.Contains(t, text, "A sample API for pets")
+		assert.Contains(t, text, "/pets")
+		assert.Contains(t, text, "List all pets")
+		assert.Contains(t, text, "Create a pet")
+		assert.Contains(t, text, "Get a pet by ID")
+		assert.Contains(t, text, "pets")
+		assert.Contains(t, text, "Everything about your Pets")
+	})
+
+	t.Run("extracts searchable text from JSON spec", func(t *testing.T) {
+		p := New()
+		text := p.ToPlainText([]byte(minimalSpecJSON))
+
+		assert.Contains(t, text, "Petstore API")
+		assert.Contains(t, text, "List all pets")
+	})
+
+	t.Run("invalid content returns empty string", func(t *testing.T) {
+		p := New()
+		text := p.ToPlainText([]byte("not a spec"))
+
+		assert.Empty(t, text)
+	})
+
+	t.Run("semantically invalid spec returns empty string", func(t *testing.T) {
+		p := New()
+		text := p.ToPlainText([]byte(`openapi: "3.0.3"
+info:
+  title: Bad API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+      responses:
+        "200":
+          description: OK`))
+
+		assert.Empty(t, text)
+	})
+
+	t.Run("spec with no paths", func(t *testing.T) {
+		p := New()
+		text := p.ToPlainText([]byte(`openapi: "3.0.3"
+info:
+  title: Empty API
+  version: "1.0.0"
+paths: {}`))
+
+		assert.Contains(t, text, "Empty API")
+	})
+}

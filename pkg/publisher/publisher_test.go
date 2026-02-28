@@ -101,10 +101,12 @@ func TestBuildIngestRequest(t *testing.T) {
 	assert.Equal(t, "api/readme.md", req.Documents[0].Path)
 	assert.Equal(t, "# API", req.Documents[0].Content)
 	assert.Equal(t, "upsert", req.Documents[0].Action)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[0].ContentType)
 
 	assert.Equal(t, "guide.md", req.Documents[1].Path)
 	assert.Equal(t, "# Guide", req.Documents[1].Content)
 	assert.Equal(t, "upsert", req.Documents[1].Action)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType)
 }
 
 func TestBuildIngestRequest_SyncFalse(t *testing.T) {
@@ -125,6 +127,68 @@ func TestBuildIngestRequest_Empty(t *testing.T) {
 	assert.Equal(t, "owner/repo", req.Repo)
 	assert.True(t, req.Sync)
 	assert.Empty(t, req.Documents)
+}
+
+func TestBuildIngestRequest_DetectsOpenAPI(t *testing.T) {
+	files := map[string]string{
+		"api/petstore.yaml": `openapi: "3.0.3"
+info:
+  title: Petstore API
+  version: "1.0.0"
+paths: {}`,
+		"docs/readme.md": "# Hello",
+		"config.yaml":    "name: my-app\nversion: 1.0.0",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
+
+	// config.yaml is not OpenAPI, so it should be skipped entirely.
+	assert.Len(t, req.Documents, 2)
+
+	// Sorted: api/petstore.yaml, docs/readme.md (config.yaml filtered out)
+	assert.Equal(t, "api/petstore.yaml", req.Documents[0].Path)
+	assert.Equal(t, core.ContentTypeOpenAPI, req.Documents[0].ContentType)
+
+	assert.Equal(t, "docs/readme.md", req.Documents[1].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType)
+}
+
+func TestBuildIngestRequest_DetectsSwagger2(t *testing.T) {
+	files := map[string]string{
+		"api/legacy.yaml": `swagger: "2.0"
+info:
+  title: Legacy API
+  version: "1.0.0"
+basePath: /v1
+paths: {}`,
+		"docs/readme.md": "# Hello",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
+
+	assert.Len(t, req.Documents, 2)
+
+	assert.Equal(t, "api/legacy.yaml", req.Documents[0].Path)
+	assert.Equal(t, core.ContentTypeOpenAPI, req.Documents[0].ContentType)
+
+	assert.Equal(t, "docs/readme.md", req.Documents[1].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[1].ContentType)
+}
+
+func TestBuildIngestRequest_SkipsNonOpenAPIYAML(t *testing.T) {
+	files := map[string]string{
+		"config.yaml":        "name: my-app\nversion: 1.0.0",
+		"settings.json":      `{"debug": true}`,
+		"docs/readme.md":     "# Hello",
+		"docker-compose.yml": "version: '3'\nservices: {}",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, false)
+
+	// Only the markdown file should remain; all YAML/JSON without OpenAPI keys are skipped.
+	assert.Len(t, req.Documents, 1)
+	assert.Equal(t, "docs/readme.md", req.Documents[0].Path)
+	assert.Equal(t, core.ContentTypeMarkdown, req.Documents[0].ContentType)
 }
 
 func TestSendIngestRequest_Success(t *testing.T) {

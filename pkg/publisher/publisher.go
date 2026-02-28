@@ -142,10 +142,20 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, sync bo
 	sort.Strings(paths)
 
 	for _, p := range paths {
+		ct := core.DetectContentType(p, []byte(files[p]))
+
+		// Skip files whose content type could not be determined (e.g. arbitrary
+		// YAML/JSON that is not an OpenAPI spec).
+		if ct == "" {
+			slog.Debug("skipping file with unrecognized content type", "path", p)
+			continue
+		}
+
 		documents = append(documents, core.IngestDocument{
-			Path:    p,
-			Content: files[p],
-			Action:  "upsert",
+			Path:        p,
+			Content:     files[p],
+			Action:      "upsert",
+			ContentType: ct,
 		})
 	}
 

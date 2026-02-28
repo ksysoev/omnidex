@@ -258,6 +258,98 @@ const repoIndexContentBody = `
     {{end}}
 </div>`
 
+// openapiDocContentBody is the document page template for OpenAPI specs rendered via Swagger UI.
+// Swagger UI CSS and JS are loaded from CDN only when an OpenAPI document is displayed (lazy-loading).
+// The spec JSON is embedded inline and fed to SwaggerUI on initialisation.
+const openapiDocContentBody = `
+<div class="flex gap-8">
+    <aside class="w-64 flex-shrink-0 hidden md:block">
+        <nav class="sticky top-8">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{.Doc.Repo}}</h3>
+            <ul class="space-y-1">
+                {{range .NavDocs}}
+                <li>
+                    <a href="/docs/{{.Repo}}/{{.Path}}"
+                       hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
+                       class="block px-3 py-1.5 text-sm rounded-md hover:bg-gray-100 text-gray-700 hover:text-gray-900">
+                        {{.Title}}
+                    </a>
+                </li>
+                {{end}}
+            </ul>
+        </nav>
+    </aside>
+    <article id="doc-content" class="flex-1 min-w-0">
+        <div class="mb-4 text-sm text-gray-500">
+            <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+            <span class="mx-1">/</span>
+            <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
+            <span class="mx-1">/</span>
+            <span>{{.Doc.Path}}</span>
+        </div>
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <div id="swagger-ui"></div>
+            <script type="application/json" id="openapi-spec">{{html .HTML}}</script>
+            <script>
+            (function() {
+                var specEl = document.getElementById('openapi-spec');
+                if (!specEl) return;
+                var spec = JSON.parse(specEl.textContent);
+
+                function ensureSwaggerCssLoaded() {
+                    if (document.querySelector('link[data-swagger-ui-css]')) {
+                        return;
+                    }
+                    var link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui.css';
+                    link.integrity = 'sha384-WoOxtFhjrhn23jYeguEcSJkYdgSIer0UxZkoMKKEqROW+TDEmHEPwckfxWmZXSIw';
+                    link.crossOrigin = 'anonymous';
+                    link.setAttribute('data-swagger-ui-css', 'true');
+                    document.head.appendChild(link);
+                }
+
+                function initSwagger() {
+                    if (!document.getElementById('swagger-ui')) return;
+                    ensureSwaggerCssLoaded();
+                    window.SwaggerUIBundle({
+                        spec: spec,
+                        dom_id: '#swagger-ui',
+                        presets: [
+                            window.SwaggerUIBundle.presets.apis
+                        ],
+                        layout: 'BaseLayout',
+                        deepLinking: true,
+                        defaultModelsExpandDepth: 1,
+                        docExpansion: 'list'
+                    });
+                }
+
+                if (typeof window.SwaggerUIBundle === 'function') {
+                    initSwagger();
+                    return;
+                }
+
+                var existingScript = document.querySelector('script[data-swagger-ui-bundle]');
+                if (existingScript) {
+                    existingScript.addEventListener('load', initSwagger);
+                    return;
+                }
+
+                var script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.24.1/swagger-ui-bundle.js';
+                script.integrity = 'sha384-zx2gjpuecwb2jF6HeevbQlN1lehCRCTzWrUWb+A/yu/u5Pkt28/0Qd1XjsU42sbH';
+                script.crossOrigin = 'anonymous';
+                script.async = true;
+                script.setAttribute('data-swagger-ui-bundle', 'true');
+                script.onload = initSwagger;
+                document.head.appendChild(script);
+            })();
+            </script>
+        </div>
+    </article>
+</div>`
+
 // notFoundBody is the 404 page content template.
 const notFoundBody = `
 <div class="text-center py-16">

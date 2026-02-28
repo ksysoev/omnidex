@@ -353,3 +353,81 @@ func TestRenderNotFound(t *testing.T) {
 	assert.Contains(t, output, "Not Found")
 	assert.Contains(t, output, "<!DOCTYPE html>")
 }
+
+func TestRenderDoc_OpenAPI_FullPage(t *testing.T) {
+	r := New()
+
+	doc := core.Document{
+		ID:          "my-org/repo/petstore.yaml",
+		Repo:        "my-org/repo",
+		Path:        "petstore.yaml",
+		Title:       "Petstore API",
+		ContentType: core.ContentTypeOpenAPI,
+	}
+
+	specJSON := []byte(`{"openapi":"3.0.3","info":{"title":"Petstore API","version":"1.0.0"},"paths":{}}`)
+
+	navDocs := []core.DocumentMeta{
+		{ID: "my-org/repo/petstore.yaml", Repo: "my-org/repo", Path: "petstore.yaml", Title: "Petstore API"},
+	}
+
+	var buf bytes.Buffer
+
+	err := r.RenderDoc(&buf, doc, specJSON, nil, navDocs, false)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "<!DOCTYPE html>")
+	assert.Contains(t, output, "swagger-ui")
+	assert.Contains(t, output, "SwaggerUIBundle")
+	assert.Contains(t, output, "swagger-ui-bundle.js")
+	assert.Contains(t, output, "swagger-ui.css")
+	assert.Contains(t, output, "Petstore API")
+	assert.NotContains(t, output, "On this page", "OpenAPI docs should not show markdown TOC")
+}
+
+func TestRenderDoc_OpenAPI_Partial(t *testing.T) {
+	r := New()
+
+	doc := core.Document{
+		ID:          "my-org/repo/petstore.yaml",
+		Repo:        "my-org/repo",
+		Path:        "petstore.yaml",
+		Title:       "Petstore API",
+		ContentType: core.ContentTypeOpenAPI,
+	}
+
+	specJSON := []byte(`{"openapi":"3.0.3","info":{"title":"Petstore API","version":"1.0.0"},"paths":{}}`)
+
+	var buf bytes.Buffer
+
+	err := r.RenderDoc(&buf, doc, specJSON, nil, nil, true)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.NotContains(t, output, "<!DOCTYPE html>")
+	assert.Contains(t, output, "swagger-ui")
+	assert.Contains(t, output, "SwaggerUIBundle")
+}
+
+func TestRenderDoc_MarkdownDefault_WhenContentTypeEmpty(t *testing.T) {
+	r := New()
+
+	doc := core.Document{
+		ID:   "my-org/repo/readme.md",
+		Repo: "my-org/repo",
+		Path: "readme.md",
+		// ContentType is empty — should default to markdown template.
+	}
+
+	htmlContent := []byte("<h1>README</h1><p>Content</p>")
+
+	var buf bytes.Buffer
+
+	err := r.RenderDoc(&buf, doc, htmlContent, nil, nil, false)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "prose")
+	assert.NotContains(t, output, "swagger-ui")
+}

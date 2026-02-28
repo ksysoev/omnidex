@@ -16,4 +16,4 @@ packages:
     interfaces:
       docStore:
       searchEngine:
-      markdownRenderer:
+      ContentProcessor:
