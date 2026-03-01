@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // docStore defines the interface for document persistence operations.
@@ -35,6 +37,10 @@ type ContentProcessor interface {
 	ExtractTitle(src []byte) string
 	// ToPlainText converts content to plain text for search indexing.
 	ToPlainText(src []byte) string
+	// ExtractHeadings returns the H1-H3 headings from the content with their
+	// anchor IDs, used to resolve search result deep-links. Returns nil when
+	// the content type does not support heading-based navigation.
+	ExtractHeadings(src []byte) []Heading
 }
 
 // Service encapsulates core business logic and dependencies.
@@ -226,11 +232,17 @@ func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document,
 }
 
 // SearchDocs performs a full-text search across all indexed documents.
+// After retrieving results from the search engine it attempts to resolve a
+// heading anchor for each hit so that the result link can scroll directly to
+// the matching section. Anchor resolution is best-effort; failures are logged
+// and do not prevent results from being returned.
 func (s *Service) SearchDocs(ctx context.Context, query string, opts SearchOpts) (*SearchResults, error) {
 	results, err := s.search.Search(ctx, query, opts)
 	if err != nil {
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
+
+	s.resolveAnchors(ctx, results)
 
 	return results, nil
 }
@@ -356,4 +368,348 @@ func (s *Service) reindexForCompensation(ctx context.Context, repo, path string,
 		"path", path,
 		"deleteErr", deleteErr,
 	)
+}
+
+// markTagRE matches HTML <mark> and </mark> tags produced by Bleve highlighting
+// so they can be stripped before comparing fragments against plain text.
+var markTagRE = regexp.MustCompile(`</?mark>`)
+
+// stripMarkTags removes <mark> and </mark> tags from a Bleve highlight fragment,
+// returning the plain text that was actually indexed.
+func stripMarkTags(fragment string) string {
+	return markTagRE.ReplaceAllString(fragment, "")
+}
+
+// resolveAnchors enriches each SearchResult with a heading Anchor so that
+// result links can deep-link directly to the matching section of a document.
+// It works by:
+//  1. Fetching the source document from the store.
+//  2. Extracting headings (anchor IDs + text) via the content processor.
+//  3. Converting the document to the same plain text that was indexed.
+//  4. Stripping <mark> tags from the first content fragment to get raw text.
+//  5. Finding that text in the plain text and determining which heading section
+//     it falls under.
+//
+// Resolution is best-effort: failures are logged and do not affect other hits.
+// Results with no content fragments (title-only matches) are skipped.
+func (s *Service) resolveAnchors(ctx context.Context, results *SearchResults) {
+	if results == nil {
+		return
+	}
+
+	for i := range results.Hits {
+		hit := &results.Hits[i]
+
+		if len(hit.ContentFragments) == 0 {
+			// Title-only match -- no content position to map; link to page top.
+			continue
+		}
+
+		anchor, err := s.resolveAnchor(ctx, hit)
+		if err != nil {
+			slog.DebugContext(ctx, "anchor resolution skipped",
+				"docID", hit.ID,
+				"err", err,
+			)
+
+			continue
+		}
+
+		hit.Anchor = anchor
+	}
+}
+
+// resolveAnchor resolves the heading anchor for a single SearchResult.
+// It returns the heading ID of the section that contains the first content
+// fragment, or an empty string when the match falls before the first heading.
+func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string, error) {
+	doc, err := s.store.Get(ctx, hit.Repo, hit.Path)
+	if err != nil {
+		return "", fmt.Errorf("get document: %w", err)
+	}
+
+	processor := s.getProcessor(doc.ContentType)
+
+	headings := processor.ExtractHeadings([]byte(doc.Content))
+	if len(headings) == 0 {
+		// No headings available; link to page top.
+		return "", nil
+	}
+
+	plainText := processor.ToPlainText([]byte(doc.Content))
+
+	// Locate the matched term's byte offset in the plain text.
+	// fragmentMatchIndex handles Bleve's ellipsis padding and mid-word cuts.
+	fragIdx := fragmentMatchIndex(hit.ContentFragments[0], plainText)
+	if fragIdx < 0 {
+		return "", nil
+	}
+
+	return findAnchorAtPosition(plainText, headings, fragIdx), nil
+}
+
+// findHeadingLine returns the byte offset of the first occurrence of heading h
+// within plainText[fromByte:] that occupies a complete line — i.e. h is
+// preceded by '\n' (or the start of the string) and followed by '\n' (or the
+// end of the string). This prevents false positives when the same word appears
+// in a body paragraph before the actual heading line.
+// Returns -1 if no whole-line match is found.
+func findHeadingLine(plainText, h string, fromByte int) int {
+	offset := fromByte
+
+	for offset <= len(plainText)-len(h) {
+		idx := strings.Index(plainText[offset:], h)
+		if idx < 0 {
+			return -1
+		}
+
+		abs := offset + idx
+
+		precededByBoundary := abs == 0 || plainText[abs-1] == '\n'
+		afterEnd := abs + len(h)
+		followedByBoundary := afterEnd >= len(plainText) || plainText[afterEnd] == '\n'
+
+		if precededByBoundary && followedByBoundary {
+			return abs
+		}
+
+		// Not a whole-line match; resume search one byte past this occurrence.
+		offset = abs + 1
+	}
+
+	return -1
+}
+
+// findAnchorAtPosition returns the ID of the heading whose section contains
+// the character at fragIdx in plainText. It builds section boundaries by
+// locating each heading's text in document order as whole lines, then returns
+// the last boundary whose offset is ≤ fragIdx.
+//
+// Returns an empty string when fragIdx falls before the first heading or no
+// valid boundaries can be established.
+func findAnchorAtPosition(plainText string, headings []Heading, fragIdx int) string {
+	type sectionBoundary struct {
+		id     string
+		offset int
+	}
+
+	boundaries := make([]sectionBoundary, 0, len(headings))
+	searchFrom := 0
+
+	for _, h := range headings {
+		if h.Text == "" || h.ID == "" {
+			continue
+		}
+
+		abs := findHeadingLine(plainText, h.Text, searchFrom)
+		if abs < 0 {
+			// Heading not found as a complete line (can happen when heading text
+			// contains characters stripped during plain-text conversion).
+			continue
+		}
+
+		boundaries = append(boundaries, sectionBoundary{offset: abs, id: h.ID})
+		searchFrom = abs + len(h.Text)
+	}
+
+	if len(boundaries) == 0 {
+		return ""
+	}
+
+	// Find the last section boundary that starts at or before the fragment.
+	anchor := ""
+
+	for _, b := range boundaries {
+		if b.offset > fragIdx {
+			break
+		}
+
+		anchor = b.id
+	}
+
+	return anchor
+}
+
+// bleveEllipsis is the Unicode ellipsis character (U+2026) that Bleve's
+// SimpleFragmenter prepends/appends when a fragment window does not align
+// with the document start or end.
+const bleveEllipsis = "…"
+
+// caseInsensitiveIndex returns the byte offset of the first case-insensitive
+// occurrence of substr in s. It slides a rune-count window across s and compares
+// each window using strings.EqualFold, so both the returned offset and the
+// compared window are always aligned to rune boundaries in the original string
+// regardless of Unicode case folding.
+// Returns -1 if substr is not found or substr is empty.
+func caseInsensitiveIndex(s, substr string) int {
+	if substr == "" {
+		return -1
+	}
+
+	// Count the runes in substr. The window in s must span the same number of
+	// runes (not bytes) so that s[windowStart:windowEnd] is never split mid-rune.
+	n := utf8.RuneCountInString(substr)
+
+	// Initialise the end of the first window by advancing n runes from the
+	// start of s.
+	windowEnd := 0
+
+	for range n {
+		if windowEnd >= len(s) {
+			return -1 // s has fewer runes than substr
+		}
+
+		_, size := utf8.DecodeRuneInString(s[windowEnd:])
+		windowEnd += size
+	}
+
+	windowStart := 0
+
+	for {
+		if strings.EqualFold(s[windowStart:windowEnd], substr) {
+			return windowStart
+		}
+
+		if windowEnd >= len(s) {
+			break
+		}
+
+		// Slide both ends of the window forward by one rune.
+		_, startSize := utf8.DecodeRuneInString(s[windowStart:])
+		windowStart += startSize
+
+		_, endSize := utf8.DecodeRuneInString(s[windowEnd:])
+		windowEnd += endSize
+	}
+
+	return -1
+}
+
+// fragmentMatchIndex locates the first <mark>-ed term from a Bleve highlight
+// fragment within plainText, returning its byte offset. Returns -1 if not found.
+//
+// Bleve's SimpleFragmenter may:
+//   - Prefix the fragment with "…" (U+2026) when the window doesn't start at
+//     the document beginning.
+//   - Cut the content mid-word right after the "…" (e.g. "…ntroduction").
+//
+// This function strips the ellipsis and any resulting partial leading word,
+// builds a locator string of (cleaned context before mark) + (marked term),
+// finds that locator in plainText, and returns the offset pointing AT the
+// marked term — not the start of the surrounding context window.
+func fragmentMatchIndex(rawFrag, plainText string) int {
+	markOpen := strings.Index(rawFrag, "<mark>")
+	if markOpen < 0 {
+		// No marks: fall back to stripping everything and trimming ellipsis.
+		s := strings.TrimLeft(stripMarkTags(rawFrag), bleveEllipsis)
+		s = skipPartialLeadingWord(s)
+		s = strings.TrimSpace(s)
+
+		if s == "" {
+			return -1
+		}
+
+		idx := strings.Index(plainText, s)
+		if idx < 0 {
+			idx = caseInsensitiveIndex(plainText, s)
+		}
+
+		return idx
+	}
+
+	// Extract the marked (matched) term.
+	afterOpen := rawFrag[markOpen+len("<mark>"):]
+
+	closeIdx := strings.Index(afterOpen, "</mark>")
+	if closeIdx < 0 {
+		return -1
+	}
+
+	markedTerm := afterOpen[:closeIdx]
+
+	// Build cleaned context before the mark.
+	// The pre-mark text may start with "…" and a partial word; strip both.
+	preMark := rawFrag[:markOpen]
+	hadEllipsis := strings.HasPrefix(preMark, bleveEllipsis)
+	preMark = strings.TrimLeft(preMark, bleveEllipsis)
+
+	if hadEllipsis {
+		// After stripping "…" the first "word" may be a partial word fragment.
+		preMark = skipPartialLeadingWord(preMark)
+	}
+
+	// Limit context length to avoid very long locators that might fail due
+	// to subtle whitespace differences.
+	const maxContextBytes = 120
+	if len(preMark) > maxContextBytes {
+		start := len(preMark) - maxContextBytes
+		// Advance start to the next UTF-8 rune boundary so we never split a
+		// multi-byte rune, which would produce an invalid locator string.
+		for start < len(preMark) && !utf8.RuneStart(preMark[start]) {
+			start++
+		}
+
+		preMark = preMark[start:]
+	}
+
+	locator := preMark + markedTerm
+
+	idx := strings.Index(plainText, locator)
+	if idx < 0 {
+		idx = caseInsensitiveIndex(plainText, locator)
+		if idx >= 0 {
+			return idx + len(preMark)
+		}
+
+		// Context didn't match; fall back to the marked term alone.
+		idx = strings.Index(plainText, markedTerm)
+		if idx < 0 {
+			idx = caseInsensitiveIndex(plainText, markedTerm)
+		}
+
+		return idx
+	}
+
+	// Return the position of the marked term within the plain text.
+	return idx + len(preMark)
+}
+
+// skipPartialLeadingWord advances s past the first line when s starts with a
+// lowercase letter, indicating that Bleve cut the content mid-word immediately
+// after "…". Uppercase, digit, or whitespace at the start means the content
+// already begins at a word boundary and the string is returned unchanged.
+//
+// When skipping, the function advances to the character after the first newline
+// so that a partial trailing line such as "ome content.\nSetup\n…" is consumed
+// as a unit rather than leaving "content.\n…" as a misleading prefix.
+// If no newline is present it falls back to the first space or tab.
+func skipPartialLeadingWord(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// If s starts with whitespace it is already at a word boundary.
+	if s[0] == ' ' || s[0] == '\t' || s[0] == '\n' || s[0] == '\r' {
+		return s
+	}
+
+	// Only skip when the first character is a lowercase ASCII letter, which is
+	// the tell-tale sign of a Bleve mid-word cut (e.g. "…ntroduction").
+	if s[0] < 'a' || s[0] > 'z' {
+		return s
+	}
+
+	// Advance past the first newline to discard the entire partial line.
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		return s[idx+1:]
+	}
+
+	// No newline — fall back to the first horizontal whitespace character.
+	if idx := strings.IndexAny(s, " \t\r"); idx > 0 {
+		return s[idx+1:]
+	}
+
+	// No boundary found — the entire string might be a single partial word;
+	// return as-is so callers can still attempt a lookup.
+	return s
 }

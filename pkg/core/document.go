@@ -47,6 +47,7 @@ type SearchResult struct {
 	Repo             string
 	Path             string
 	Title            string
+	Anchor           string   // heading anchor ID to deep-link into the document (may be empty)
 	TitleFragments   []string // highlighted fragments from the title field
 	ContentFragments []string // highlighted fragments from the content field
 	Score            float64

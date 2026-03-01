@@ -1,22 +1,30 @@
 // Package openapi provides an OpenAPI specification content processor.
 // It implements the core.ContentProcessor interface for indexing, searching,
-// and rendering OpenAPI specs (both YAML and JSON) using Swagger UI.
+// and rendering OpenAPI specs (both YAML and JSON) using Scalar API Reference.
 package openapi
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/ksysoev/omnidex/pkg/core"
 )
 
+// methodOperation pairs an HTTP method name (lowercase) with its operation.
+type methodOperation struct {
+	op     *openapi3.Operation
+	method string
+}
+
 // Processor implements core.ContentProcessor for OpenAPI specifications.
 // It uses kin-openapi to parse specs and extract structured information for
 // search indexing and title extraction. HTML rendering returns the parsed spec
-// marshaled to JSON for consumption by Swagger UI.
+// marshaled to JSON for consumption by Scalar API Reference.
 type Processor struct{}
 
 // New creates a new OpenAPI Processor.
@@ -24,16 +32,17 @@ func New() *Processor {
 	return &Processor{}
 }
 
-// RenderHTML returns the raw OpenAPI spec as HTML-safe content for Swagger UI rendering.
-// The view layer is responsible for embedding this into a Swagger UI container.
-// Headings are not extracted for OpenAPI specs since Swagger UI provides its own navigation.
+// RenderHTML returns the raw OpenAPI spec as HTML-safe content for Scalar API Reference rendering.
+// The view layer is responsible for embedding this into a Scalar API Reference container.
+// Headings are not extracted here because Scalar API Reference manages its own
+// client-side navigation and anchor generation.
 func (p *Processor) RenderHTML(src []byte) ([]byte, []core.Heading, error) {
 	spec, err := parseSpec(src)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse OpenAPI spec: %w", err)
 	}
 
-	// Marshal the spec to JSON for Swagger UI consumption.
+	// Marshal the spec to JSON for Scalar API Reference consumption.
 	specJSON, err := json.Marshal(spec)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal OpenAPI spec to JSON: %w", err)
@@ -58,9 +67,12 @@ func (p *Processor) ExtractTitle(src []byte) string {
 }
 
 // ToPlainText extracts searchable plain text from an OpenAPI spec.
-// It collects the API title, description, endpoint paths, operation summaries,
-// operation descriptions, and tag names to create a rich text representation
-// for full-text search indexing.
+// It collects the API title, description, tag names and descriptions, then
+// for each path (sorted alphabetically) and each HTTP method (in a fixed
+// canonical order), emits "{METHOD} {path}" followed by the operation summary
+// and description. This deterministic ordering ensures that ExtractHeadings and
+// ToPlainText iterate the spec in the same sequence, enabling accurate
+// fragment-to-anchor mapping during search result deep-linking.
 func (p *Processor) ToPlainText(src []byte) string {
 	spec, err := parseSpec(src)
 	if err != nil {
@@ -82,9 +94,11 @@ func (p *Processor) ToPlainText(src []byte) string {
 		}
 	}
 
-	// Tag descriptions.
+	// Tag descriptions (in spec.Tags order, which preserves authoring intent).
+	// Only emit tags with non-empty names to match the ExtractHeadings guard,
+	// keeping byte offsets aligned between the two functions.
 	for _, tag := range spec.Tags {
-		if tag != nil {
+		if tag != nil && tag.Name != "" {
 			buf.WriteString(tag.Name)
 			buf.WriteByte('\n')
 
@@ -95,24 +109,37 @@ func (p *Processor) ToPlainText(src []byte) string {
 		}
 	}
 
-	// Paths and operations.
+	// Paths and operations (sorted by path for determinism, then fixed method order).
 	if spec.Paths != nil {
-		for path, pathItem := range spec.Paths.Map() {
-			buf.WriteString(path)
-			buf.WriteByte('\n')
+		pathsMap := spec.Paths.Map()
+		paths := make([]string, 0, len(pathsMap))
 
+		for path := range pathsMap {
+			paths = append(paths, path)
+		}
+
+		sort.Strings(paths)
+
+		for _, path := range paths {
+			pathItem := pathsMap[path]
 			if pathItem == nil {
 				continue
 			}
 
-			for _, op := range collectOperations(pathItem) {
-				if op.Summary != "" {
-					buf.WriteString(op.Summary)
+			for _, mop := range collectMethodOperations(pathItem) {
+				// Emit "{METHOD} {path}" as the operation heading line.
+				buf.WriteString(strings.ToUpper(mop.method))
+				buf.WriteByte(' ')
+				buf.WriteString(path)
+				buf.WriteByte('\n')
+
+				if mop.op.Summary != "" {
+					buf.WriteString(mop.op.Summary)
 					buf.WriteByte('\n')
 				}
 
-				if op.Description != "" {
-					buf.WriteString(op.Description)
+				if mop.op.Description != "" {
+					buf.WriteString(mop.op.Description)
 					buf.WriteByte('\n')
 				}
 			}
@@ -122,10 +149,119 @@ func (p *Processor) ToPlainText(src []byte) string {
 	return strings.TrimSpace(buf.String())
 }
 
+// ExtractHeadings returns headings for an OpenAPI spec that match the anchor
+// IDs generated by Scalar API Reference (v1.46+) in single-document hash-routing
+// mode. This allows search results to deep-link directly to the matching
+// operation or tag section in the rendered Scalar UI.
+//
+// The anchor format mirrors Scalar's default generateId logic:
+//   - Tags:       "tag/{github-slug(tagName)}"
+//   - Operations: "tag/{tagSlug}/{METHOD}{path}"  (when the op has at least one tag)
+//   - Untagged:   "{METHOD}{path}"
+//
+// Headings are returned in the same order that ToPlainText emits their
+// corresponding text, so that byte offsets from fragmentMatchIndex map
+// correctly to section boundaries built by findAnchorAtPosition.
+func (p *Processor) ExtractHeadings(src []byte) []core.Heading {
+	spec, err := parseSpec(src)
+	if err != nil {
+		return nil
+	}
+
+	var headings []core.Heading
+
+	// 1. Tag headings (in spec.Tags order).
+	for _, tag := range spec.Tags {
+		if tag == nil || tag.Name == "" {
+			continue
+		}
+
+		headings = append(headings, core.Heading{
+			Text: tag.Name,
+			ID:   "tag/" + githubSlug(tag.Name),
+		})
+	}
+
+	if spec.Paths == nil {
+		return headings
+	}
+
+	// 2. Operation headings (paths sorted alphabetically, methods in canonical order).
+	pathsMap := spec.Paths.Map()
+	paths := make([]string, 0, len(pathsMap))
+
+	for path := range pathsMap {
+		paths = append(paths, path)
+	}
+
+	sort.Strings(paths)
+
+	for _, path := range paths {
+		pathItem := pathsMap[path]
+		if pathItem == nil {
+			continue
+		}
+
+		for _, mop := range collectMethodOperations(pathItem) {
+			method := strings.ToUpper(mop.method)
+			// Heading text must match the line emitted by ToPlainText.
+			text := method + " " + path
+			id := operationAnchorID(mop.op, method, path)
+			headings = append(headings, core.Heading{Text: text, ID: id})
+		}
+	}
+
+	return headings
+}
+
+// operationAnchorID builds the Scalar-compatible anchor ID for an operation.
+// When the operation belongs to a tag, the anchor is "tag/{tagSlug}/{METHOD}{path}".
+// Untagged operations use "{METHOD}{path}" directly.
+func operationAnchorID(op *openapi3.Operation, method, path string) string {
+	if len(op.Tags) > 0 && op.Tags[0] != "" {
+		return "tag/" + githubSlug(op.Tags[0]) + "/" + method + path
+	}
+
+	return method + path
+}
+
+// githubSlug converts a string to a URL-safe slug that matches the output of
+// the npm github-slugger package used by Scalar API Reference. It lowercases
+// the input, replaces runs of non-alphanumeric characters with a single hyphen,
+// and trims leading/trailing hyphens.
+//
+// Note: github-slugger also de-duplicates repeated slugs by appending -1, -2,
+// etc. This implementation does not replicate that counter because duplicate tag
+// names are uncommon in valid OpenAPI specs and the feature is best-effort.
+// If a spec contains duplicate tags the generated anchor for the second
+// occurrence will not match Scalar's de-duplicated ID.
+func githubSlug(s string) string {
+	s = strings.ToLower(s)
+
+	var buf strings.Builder
+
+	prevHyphen := true // start true to avoid a leading hyphen
+
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			buf.WriteRune(r)
+
+			prevHyphen = false
+		} else if !prevHyphen {
+			buf.WriteRune('-')
+
+			prevHyphen = true
+		}
+	}
+
+	return strings.TrimRight(buf.String(), "-")
+}
+
 // parseSpec parses an OpenAPI spec from raw bytes (YAML or JSON).
 // It uses a lenient loader that does not resolve external references.
-// Semantic validation is intentionally skipped so that Swagger UI can render
-// specs with minor compliance issues and provide its own user-facing feedback.
+// Semantic validation is intentionally skipped so that Scalar API Reference can
+// render specs with minor compliance issues and provide its own user-facing
+// feedback.
 func parseSpec(src []byte) (*openapi3.T, error) {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
@@ -138,24 +274,33 @@ func parseSpec(src []byte) (*openapi3.T, error) {
 	return spec, nil
 }
 
-// collectOperations returns all non-nil operations from a path item in a deterministic order.
-func collectOperations(item *openapi3.PathItem) []*openapi3.Operation {
-	ops := make([]*openapi3.Operation, 0, 8) //nolint:mnd // 8 HTTP methods
+// collectMethodOperations returns all non-nil operations from a path item in a
+// canonical HTTP-method order: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, TRACE.
+// Each result pairs the lowercase method name with its operation object.
+func collectMethodOperations(item *openapi3.PathItem) []methodOperation {
+	type candidate struct {
+		op     *openapi3.Operation
+		method string
+	}
 
-	for _, op := range []*openapi3.Operation{
-		item.Get,
-		item.Post,
-		item.Put,
-		item.Delete,
-		item.Patch,
-		item.Head,
-		item.Options,
-		item.Trace,
-	} {
-		if op != nil {
-			ops = append(ops, op)
+	candidates := []candidate{
+		{method: "get", op: item.Get},
+		{method: "post", op: item.Post},
+		{method: "put", op: item.Put},
+		{method: "delete", op: item.Delete},
+		{method: "patch", op: item.Patch},
+		{method: "head", op: item.Head},
+		{method: "options", op: item.Options},
+		{method: "trace", op: item.Trace},
+	}
+
+	result := make([]methodOperation, 0, len(candidates))
+
+	for _, c := range candidates {
+		if c.op != nil {
+			result = append(result, methodOperation(c))
 		}
 	}
 
-	return ops
+	return result
 }
