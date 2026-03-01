@@ -176,6 +176,12 @@ const layoutHeader = `<!DOCTYPE html>
             var pinchStartDist = 0, pinchStartScale = 1, pinchStartTx = 0, pinchStartTy = 0;
             var modalOpen = false;
             var _boundMouseMove, _boundMouseUp, _boundWheel, _boundKeyDown, _boundTouchMove, _boundTouchEnd;
+            // Focus management
+            var _previousFocus = null;
+            var _prevBodyOverflow = '';
+            // SVG move-in/out tracking
+            var _activeSvg = null, _activeSvgParent = null;
+            var _activeSvgOrigWidth = null, _activeSvgOrigHeight = null, _activeSvgOrigStyle = null;
 
             function getModal() {
                 if (!modal) {
@@ -263,6 +269,24 @@ const layoutHeader = `<!DOCTYPE html>
                 if (!modalOpen) return;
                 switch (e.key) {
                     case 'Escape': closeMermaidModal(); break;
+                    case 'Tab': {
+                        // Focus trap: keep Tab/Shift+Tab inside the modal.
+                        var focusable = modal.querySelectorAll(
+                            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                        );
+                        var focusArr = Array.prototype.slice.call(focusable).filter(function(el) {
+                            return !el.disabled && el.offsetParent !== null;
+                        });
+                        if (focusArr.length === 0) { e.preventDefault(); break; }
+                        var first = focusArr[0];
+                        var last  = focusArr[focusArr.length - 1];
+                        if (e.shiftKey) {
+                            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+                        } else {
+                            if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+                        }
+                        break;
+                    }
                     case '+': case '=': e.preventDefault(); applyZoom(1.25, viewport.clientWidth / 2, viewport.clientHeight / 2); break;
                     case '-': e.preventDefault(); applyZoom(0.8, viewport.clientWidth / 2, viewport.clientHeight / 2); break;
                     case '0': e.preventDefault(); fitToScreen(); break;
@@ -316,9 +340,9 @@ const layoutHeader = `<!DOCTYPE html>
             window.openMermaidModal = function(svgEl) {
                 if (!getModal()) return;
 
-                // Resolve intrinsic pixel dimensions before cloning.
-                // Mermaid sets width="100%" on the SVG; parseFloat("100%") = 100
-                // which is wrong. viewBox always carries the true pixel dimensions.
+                // Resolve intrinsic pixel dimensions from viewBox or bounding rect.
+                // Mermaid sets width="100%" on the SVG; viewBox always carries the
+                // true pixel dimensions, so prefer it over the attribute value.
                 var intrinsicW = 0, intrinsicH = 0;
                 var vb = svgEl.viewBox && svgEl.viewBox.baseVal;
                 if (vb && vb.width && vb.height) {
@@ -331,21 +355,30 @@ const layoutHeader = `<!DOCTYPE html>
                     intrinsicH = br.height;
                 }
 
-                var clone = svgEl.cloneNode(true);
-                clone.removeAttribute('style');
-                // Stamp explicit px dimensions so the clone has a stable layout
-                // size that matches the values fitToScreen and applyZoom rely on.
+                // Move the original SVG into the modal canvas instead of cloning.
+                // Cloning duplicates all id attributes, which breaks SVG fragment
+                // references (url(#…)) because they resolve document-wide.
+                _activeSvg = svgEl;
+                _activeSvgParent = svgEl.parentNode;
+                _activeSvgOrigWidth  = svgEl.getAttribute('width');
+                _activeSvgOrigHeight = svgEl.getAttribute('height');
+                _activeSvgOrigStyle  = svgEl.getAttribute('style');
+                svgEl.removeAttribute('style');
+                // Stamp explicit px dimensions so fitToScreen has a stable size.
                 if (intrinsicW && intrinsicH) {
-                    clone.setAttribute('width',  intrinsicW);
-                    clone.setAttribute('height', intrinsicH);
+                    svgEl.setAttribute('width',  intrinsicW);
+                    svgEl.setAttribute('height', intrinsicH);
                 }
                 canvas.innerHTML = '';
-                canvas.appendChild(clone);
+                canvas.appendChild(svgEl);
+
                 scale = 1; tx = 0; ty = 0;
                 applyTransform();
                 modal.classList.add('is-open');
+                _prevBodyOverflow = document.body.style.overflow;
                 document.body.style.overflow = 'hidden';
                 modalOpen = true;
+                _previousFocus = document.activeElement;
                 requestAnimationFrame(function() { fitToScreen(); viewport.focus(); });
                 _boundMouseMove = onMouseMove;
                 _boundMouseUp   = onMouseUp;
@@ -366,10 +399,36 @@ const layoutHeader = `<!DOCTYPE html>
             window.closeMermaidModal = function() {
                 if (!modalOpen || !getModal()) return;
                 modal.classList.remove('is-open');
-                document.body.style.overflow = '';
+                document.body.style.overflow = _prevBodyOverflow;
                 modalOpen = false;
                 isPanning = false;
+
+                // Move the SVG back to its original parent and restore attributes.
+                if (_activeSvg && _activeSvgParent) {
+                    if (_activeSvgOrigWidth !== null) {
+                        _activeSvg.setAttribute('width', _activeSvgOrigWidth);
+                    } else {
+                        _activeSvg.removeAttribute('width');
+                    }
+                    if (_activeSvgOrigHeight !== null) {
+                        _activeSvg.setAttribute('height', _activeSvgOrigHeight);
+                    } else {
+                        _activeSvg.removeAttribute('height');
+                    }
+                    if (_activeSvgOrigStyle !== null) {
+                        _activeSvg.setAttribute('style', _activeSvgOrigStyle);
+                    } else {
+                        _activeSvg.removeAttribute('style');
+                    }
+                    _activeSvgParent.appendChild(_activeSvg);
+                }
+                _activeSvg = null;
+                _activeSvgParent = null;
+                _activeSvgOrigWidth = null;
+                _activeSvgOrigHeight = null;
+                _activeSvgOrigStyle = null;
                 canvas.innerHTML = '';
+
                 viewport.removeEventListener('mousedown',  onMouseDown);
                 document.removeEventListener('mousemove',  _boundMouseMove);
                 document.removeEventListener('mouseup',    _boundMouseUp);
@@ -378,6 +437,12 @@ const layoutHeader = `<!DOCTYPE html>
                 viewport.removeEventListener('touchstart', onTouchStart);
                 viewport.removeEventListener('touchmove',  _boundTouchMove);
                 viewport.removeEventListener('touchend',   _boundTouchEnd);
+
+                // Restore focus to the element that triggered the modal.
+                if (_previousFocus && typeof _previousFocus.focus === 'function') {
+                    _previousFocus.focus();
+                }
+                _previousFocus = null;
             };
         }());
 

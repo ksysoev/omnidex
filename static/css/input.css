@@ -38,7 +38,9 @@
   line-height: 1;
 }
 .prose pre.mermaid:hover .mermaid-expand-btn { opacity: 1; pointer-events: auto; }
-.mermaid-expand-btn:hover { color: #2563eb; border-color: #93c5fd; background-color: #eff6ff; }
+.mermaid-expand-btn:hover,
+.mermaid-expand-btn:focus,
+.mermaid-expand-btn:focus-visible { opacity: 1; pointer-events: auto; color: #2563eb; border-color: #93c5fd; background-color: #eff6ff; outline-offset: 2px; }
 @media (hover: none) {
   .mermaid-expand-btn { opacity: 1; pointer-events: auto; }
 }
