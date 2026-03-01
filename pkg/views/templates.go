@@ -13,7 +13,7 @@ const layoutHeader = `<!DOCTYPE html>
     <script>
         if (typeof mermaid !== 'undefined') {
             mermaid.initialize({
-                startOnLoad: true,
+                startOnLoad: false,
                 theme: 'base',
                 themeVariables: {
                     background: '#f9fafb',
@@ -136,17 +136,32 @@ const layoutHeader = `<!DOCTYPE html>
                 h.appendChild(anchor);
             });
         }
-        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); scrollToHash(); initHeadingAnchors(); initMermaidExpand(); });
-        document.addEventListener('htmx:afterSwap', function(event) {
+        document.addEventListener('DOMContentLoaded', function() {
+            initScrollSpy(); scrollToHash(); initHeadingAnchors();
             if (typeof mermaid !== 'undefined') {
-                var target = event.detail.elt;
-                var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
-                if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}).catch(function(e) { console.error('Mermaid rendering failed:', e); }); }
+                mermaid.run().then(initMermaidExpand).catch(function(e) {
+                    console.error('Mermaid rendering failed:', e);
+                    initMermaidExpand();
+                });
             }
+        });
+        document.addEventListener('htmx:afterSwap', function(event) {
             initScrollSpy();
             scrollToHash();
             initHeadingAnchors();
-            initMermaidExpand();
+            if (typeof mermaid !== 'undefined') {
+                var target = event.detail.elt;
+                var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
+                if (nodes.length > 0) {
+                    mermaid.run({nodes: Array.from(nodes)})
+                        .then(initMermaidExpand)
+                        .catch(function(e) { console.error('Mermaid rendering failed:', e); initMermaidExpand(); });
+                } else {
+                    initMermaidExpand();
+                }
+            } else {
+                initMermaidExpand();
+            }
         });
         document.addEventListener('htmx:beforeSwap', function() { closeMermaidModal(); });
 
@@ -370,34 +385,18 @@ const layoutHeader = `<!DOCTYPE html>
             var containers = document.querySelectorAll('.prose pre.mermaid');
             containers.forEach(function(pre) {
                 if (pre.querySelector('.mermaid-expand-btn')) return;
-                function attachExpandBtn() {
-                    if (pre.querySelector('.mermaid-expand-btn')) return;
-                    var btn = document.createElement('button');
-                    btn.className = 'mermaid-expand-btn';
-                    btn.setAttribute('aria-label', 'View diagram fullscreen');
-                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg><span>Expand</span>';
-                    btn.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        var svg = pre.querySelector('svg');
-                        if (svg) { window.openMermaidModal(svg); }
-                    });
-                    pre.appendChild(btn);
-                }
-                // Only inject the button after Mermaid has rendered the SVG.
-                // Appending to the <pre> before rendering would pollute the
-                // textContent that Mermaid reads as the diagram definition.
                 var svg = pre.querySelector('svg');
-                if (svg) {
-                    attachExpandBtn();
-                } else {
-                    var obs = new MutationObserver(function(mutations, observer) {
-                        if (pre.querySelector('svg')) {
-                            observer.disconnect();
-                            attachExpandBtn();
-                        }
-                    });
-                    obs.observe(pre, { childList: true, subtree: true });
-                }
+                if (!svg) return;
+                var btn = document.createElement('button');
+                btn.className = 'mermaid-expand-btn';
+                btn.setAttribute('aria-label', 'View diagram fullscreen');
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg><span>Expand</span>';
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var s = pre.querySelector('svg');
+                    if (s) { window.openMermaidModal(s); }
+                });
+                pre.appendChild(btn);
             });
         }
     </script>
