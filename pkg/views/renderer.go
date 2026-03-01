@@ -11,6 +11,17 @@ import (
 	"github.com/ksysoev/omnidex/pkg/core"
 )
 
+// githubBlobURL constructs a GitHub blob URL for viewing a file at a specific commit.
+// If commitSHA is empty, it falls back to the "main" branch.
+func githubBlobURL(repo, path, commitSHA string) string {
+	ref := commitSHA
+	if ref == "" {
+		ref = "main"
+	}
+
+	return "https://github.com/" + repo + "/blob/" + ref + "/" + path
+}
+
 // fragmentPolicy is a bluemonday policy that allows only <mark> tags in search fragments.
 // This lets Bleve's highlight markers render as real HTML while stripping any other markup.
 var fragmentPolicy = func() *bluemonday.Policy {
@@ -62,6 +73,7 @@ func New() *Renderer {
 				return tocIndentDefault
 			}
 		},
+		"githubURL": githubBlobURL,
 	}
 
 	return &Renderer{

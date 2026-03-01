@@ -218,12 +218,19 @@ const docContentBody = `
         </nav>
     </aside>
     <article id="doc-content" class="flex-1 min-w-0">
-        <div class="mb-4 text-sm text-gray-500">
-            <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
-            <span class="mx-1">/</span>
-            <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
-            <span class="mx-1">/</span>
-            <span>{{.Doc.Path}}</span>
+        <div class="mb-4 text-sm text-gray-500 flex items-center justify-between">
+            <div>
+                <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+                <span class="mx-1">/</span>
+                <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
+                <span class="mx-1">/</span>
+                <span>{{.Doc.Path}}</span>
+            </div>
+            <a href="{{githubURL .Doc.Repo .Doc.Path .Doc.CommitSHA}}" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                View source
+            </a>
         </div>
         <div class="prose prose-gray max-w-none bg-white rounded-lg border border-gray-200 p-8">
             {{html .HTML}}
@@ -352,12 +359,19 @@ const openapiDocContentBody = `
         </nav>
     </aside>
     <article id="doc-content" class="flex-1 min-w-0">
-        <div class="mb-4 text-sm text-gray-500">
-            <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
-            <span class="mx-1">/</span>
-            <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
-            <span class="mx-1">/</span>
-            <span>{{.Doc.Path}}</span>
+        <div class="mb-4 text-sm text-gray-500 flex items-center justify-between">
+            <div>
+                <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+                <span class="mx-1">/</span>
+                <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
+                <span class="mx-1">/</span>
+                <span>{{.Doc.Path}}</span>
+            </div>
+            <a href="{{githubURL .Doc.Repo .Doc.Path .Doc.CommitSHA}}" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                View source
+            </a>
         </div>
         <div class="bg-white rounded-lg border border-gray-200 p-4">
             <div id="scalar-api-reference"></div>
