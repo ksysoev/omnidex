@@ -99,24 +99,34 @@ const layoutHeader = `<!DOCTYPE html>
                 anchor.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
                 anchor.addEventListener('click', function(e) {
                     e.preventDefault();
-                    var url = window.location.origin + window.location.pathname + '#' + id;
+                    var baseUrl = window.location.href.split('#')[0];
+                    var url = baseUrl + '#' + id;
                     var done = function() {
                         anchor.classList.add('copied');
                         setTimeout(function() { anchor.classList.remove('copied'); }, 2000);
                     };
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(url).then(done).catch(function() {
-                            window.location.hash = id;
-                        });
-                    } else {
+                    var fallbackCopy = function() {
                         var ta = document.createElement('textarea');
                         ta.value = url;
                         ta.style.position = 'fixed';
                         ta.style.opacity = '0';
                         document.body.appendChild(ta);
                         ta.select();
-                        try { document.execCommand('copy'); done(); } catch(ex) { window.location.hash = id; }
+                        try {
+                            if (document.execCommand('copy')) {
+                                done();
+                            } else {
+                                window.location.hash = id;
+                            }
+                        } catch(ex) { window.location.hash = id; }
                         document.body.removeChild(ta);
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url).then(done).catch(function() {
+                            fallbackCopy();
+                        });
+                    } else {
+                        fallbackCopy();
                     }
                 });
                 h.appendChild(anchor);
