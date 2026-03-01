@@ -251,8 +251,9 @@ func githubSlug(s string) string {
 
 // parseSpec parses an OpenAPI spec from raw bytes (YAML or JSON).
 // It uses a lenient loader that does not resolve external references.
-// Semantic validation is intentionally skipped so that Swagger UI can render
-// specs with minor compliance issues and provide its own user-facing feedback.
+// Semantic validation is intentionally skipped so that Scalar API Reference can
+// render specs with minor compliance issues and provide its own user-facing
+// feedback.
 func parseSpec(src []byte) (*openapi3.T, error) {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false

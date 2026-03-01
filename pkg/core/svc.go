@@ -432,7 +432,7 @@ func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string,
 
 	headings := processor.ExtractHeadings([]byte(doc.Content))
 	if len(headings) == 0 {
-		// Content type does not support heading navigation.
+		// No headings available; link to page top.
 		return "", nil
 	}
 
@@ -448,10 +448,42 @@ func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string,
 	return findAnchorAtPosition(plainText, headings, fragIdx), nil
 }
 
+// findHeadingLine returns the byte offset of the first occurrence of heading h
+// within plainText[fromByte:] that occupies a complete line — i.e. h is
+// preceded by '\n' (or the start of the string) and followed by '\n' (or the
+// end of the string). This prevents false positives when the same word appears
+// in a body paragraph before the actual heading line.
+// Returns -1 if no whole-line match is found.
+func findHeadingLine(plainText, h string, fromByte int) int {
+	offset := fromByte
+
+	for offset <= len(plainText)-len(h) {
+		idx := strings.Index(plainText[offset:], h)
+		if idx < 0 {
+			return -1
+		}
+
+		abs := offset + idx
+
+		precededByBoundary := abs == 0 || plainText[abs-1] == '\n'
+		afterEnd := abs + len(h)
+		followedByBoundary := afterEnd >= len(plainText) || plainText[afterEnd] == '\n'
+
+		if precededByBoundary && followedByBoundary {
+			return abs
+		}
+
+		// Not a whole-line match; resume search one byte past this occurrence.
+		offset = abs + 1
+	}
+
+	return -1
+}
+
 // findAnchorAtPosition returns the ID of the heading whose section contains
 // the character at fragIdx in plainText. It builds section boundaries by
-// locating each heading's text in document order, then returns the last
-// boundary whose offset is ≤ fragIdx.
+// locating each heading's text in document order as whole lines, then returns
+// the last boundary whose offset is ≤ fragIdx.
 //
 // Returns an empty string when fragIdx falls before the first heading or no
 // valid boundaries can be established.
@@ -469,14 +501,13 @@ func findAnchorAtPosition(plainText string, headings []Heading, fragIdx int) str
 			continue
 		}
 
-		idx := strings.Index(plainText[searchFrom:], h.Text)
-		if idx < 0 {
-			// Heading not found in plain text (can happen when heading text
+		abs := findHeadingLine(plainText, h.Text, searchFrom)
+		if abs < 0 {
+			// Heading not found as a complete line (can happen when heading text
 			// contains characters stripped during plain-text conversion).
 			continue
 		}
 
-		abs := searchFrom + idx
 		boundaries = append(boundaries, sectionBoundary{offset: abs, id: h.ID})
 		searchFrom = abs + len(h.Text)
 	}
@@ -505,24 +536,50 @@ func findAnchorAtPosition(plainText string, headings []Heading, fragIdx int) str
 const bleveEllipsis = "…"
 
 // caseInsensitiveIndex returns the byte offset of the first case-insensitive
-// occurrence of substr in s. It advances rune by rune through s and compares
-// each window using strings.EqualFold, so the returned offset is always a
-// valid byte position in the original string regardless of Unicode case folding.
+// occurrence of substr in s. It slides a rune-count window across s and compares
+// each window using strings.EqualFold, so both the returned offset and the
+// compared window are always aligned to rune boundaries in the original string
+// regardless of Unicode case folding.
 // Returns -1 if substr is not found or substr is empty.
 func caseInsensitiveIndex(s, substr string) int {
 	if substr == "" {
 		return -1
 	}
 
-	n := len(substr)
+	// Count the runes in substr. The window in s must span the same number of
+	// runes (not bytes) so that s[windowStart:windowEnd] is never split mid-rune.
+	n := utf8.RuneCountInString(substr)
 
-	for i := 0; i+n <= len(s); {
-		if strings.EqualFold(s[i:i+n], substr) {
-			return i
+	// Initialise the end of the first window by advancing n runes from the
+	// start of s.
+	windowEnd := 0
+
+	for range n {
+		if windowEnd >= len(s) {
+			return -1 // s has fewer runes than substr
 		}
 
-		_, size := utf8.DecodeRuneInString(s[i:])
-		i += size
+		_, size := utf8.DecodeRuneInString(s[windowEnd:])
+		windowEnd += size
+	}
+
+	windowStart := 0
+
+	for {
+		if strings.EqualFold(s[windowStart:windowEnd], substr) {
+			return windowStart
+		}
+
+		if windowEnd >= len(s) {
+			break
+		}
+
+		// Slide both ends of the window forward by one rune.
+		_, startSize := utf8.DecodeRuneInString(s[windowStart:])
+		windowStart += startSize
+
+		_, endSize := utf8.DecodeRuneInString(s[windowEnd:])
+		windowEnd += endSize
 	}
 
 	return -1
