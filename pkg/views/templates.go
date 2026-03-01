@@ -182,6 +182,7 @@ const layoutHeader = `<!DOCTYPE html>
             // SVG move-in/out tracking
             var _activeSvg = null, _activeSvgParent = null;
             var _activeSvgOrigWidth = null, _activeSvgOrigHeight = null, _activeSvgOrigStyle = null;
+            var _activeSvgPlaceholder = null;
 
             function getModal() {
                 if (!modal) {
@@ -375,6 +376,15 @@ const layoutHeader = `<!DOCTYPE html>
                     svgEl.setAttribute('height', intrinsicH);
                 }
                 canvas.innerHTML = '';
+                // Insert a placeholder with the same dimensions so the page
+                // layout does not collapse/reflow while the SVG is in the modal.
+                var svgRect = svgEl.getBoundingClientRect();
+                var placeholder = document.createElement('div');
+                placeholder.className = 'mermaid-svg-placeholder';
+                placeholder.style.width  = svgRect.width  + 'px';
+                placeholder.style.height = svgRect.height + 'px';
+                _activeSvgParent.insertBefore(placeholder, svgEl);
+                _activeSvgPlaceholder = placeholder;
                 canvas.appendChild(svgEl);
 
                 scale = 1; tx = 0; ty = 0;
@@ -384,7 +394,15 @@ const layoutHeader = `<!DOCTYPE html>
                 document.body.style.overflow = 'hidden';
                 modalOpen = true;
                 _previousFocus = document.activeElement;
-                requestAnimationFrame(function() { fitToScreen(); viewport.focus(); });
+                requestAnimationFrame(function() {
+                    fitToScreen();
+                    // Focus the first focusable element so the focus trap works
+                    // correctly from the start (including Shift+Tab).
+                    var initialFocusEl = modal.querySelector(
+                        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                    );
+                    (initialFocusEl || viewport).focus();
+                });
                 _boundMouseMove = onMouseMove;
                 _boundMouseUp   = onMouseUp;
                 _boundWheel     = onWheel;
@@ -426,6 +444,11 @@ const layoutHeader = `<!DOCTYPE html>
                         _activeSvg.removeAttribute('style');
                     }
                     _activeSvgParent.insertBefore(_activeSvg, _activeSvgParent.firstChild);
+                    // Remove the placeholder now that the original SVG is back.
+                    if (_activeSvgPlaceholder && _activeSvgPlaceholder.parentNode) {
+                        _activeSvgPlaceholder.parentNode.removeChild(_activeSvgPlaceholder);
+                    }
+                    _activeSvgPlaceholder = null;
                 }
                 _activeSvg = null;
                 _activeSvgParent = null;
@@ -458,6 +481,7 @@ const layoutHeader = `<!DOCTYPE html>
                 var svg = pre.querySelector(':scope > svg');
                 if (!svg) return;
                 var btn = document.createElement('button');
+                btn.type = 'button';
                 btn.className = 'mermaid-expand-btn';
                 btn.setAttribute('aria-label', 'View diagram fullscreen');
                 btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg><span>Expand</span>';
