@@ -189,6 +189,166 @@ paths:
 	}
 }
 
+func TestGithubSlug(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"pets", "pets"},
+		{"Pets", "pets"},
+		{"Pet Store", "pet-store"},
+		{"user authentication", "user-authentication"},
+		{"user/v2", "user-v2"},
+		{"My Tag!", "my-tag"},
+		{"", ""},
+		{"--leading--", "leading"},
+		{"  spaces  ", "spaces"},
+		{"123numbers", "123numbers"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, githubSlug(tt.input))
+		})
+	}
+}
+
+func TestProcessor_ExtractHeadings(t *testing.T) {
+	t.Run("spec with tags and operations produces Scalar-compatible anchors", func(t *testing.T) {
+		p := New()
+		headings := p.ExtractHeadings([]byte(minimalSpecYAML))
+
+		require.NotEmpty(t, headings)
+
+		// Tag heading.
+		assert.Equal(t, "pets", headings[0].Text)
+		assert.Equal(t, "tag/pets", headings[0].ID)
+
+		// Operation headings (paths sorted: /pets before /pets/{petId}).
+		// GET /pets
+		assert.Equal(t, "GET /pets", headings[1].Text)
+		assert.Equal(t, "tag/pets/GET/pets", headings[1].ID)
+		// POST /pets
+		assert.Equal(t, "POST /pets", headings[2].Text)
+		assert.Equal(t, "tag/pets/POST/pets", headings[2].ID)
+		// GET /pets/{petId}
+		assert.Equal(t, "GET /pets/{petId}", headings[3].Text)
+		assert.Equal(t, "tag/pets/GET/pets/{petId}", headings[3].ID)
+	})
+
+	t.Run("spec without tags creates untagged operation anchors", func(t *testing.T) {
+		p := New()
+		spec := []byte(`openapi: "3.0.3"
+info:
+  title: No Tags API
+  version: "1.0.0"
+paths:
+  /items:
+    get:
+      summary: List items
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Create item
+      responses:
+        "201":
+          description: Created
+`)
+		headings := p.ExtractHeadings(spec)
+
+		require.Len(t, headings, 2)
+		assert.Equal(t, "GET /items", headings[0].Text)
+		assert.Equal(t, "GET/items", headings[0].ID)
+		assert.Equal(t, "POST /items", headings[1].Text)
+		assert.Equal(t, "POST/items", headings[1].ID)
+	})
+
+	t.Run("paths are sorted alphabetically", func(t *testing.T) {
+		p := New()
+		spec := []byte(`openapi: "3.0.3"
+info:
+  title: Sorted API
+  version: "1.0.0"
+paths:
+  /zebra:
+    get:
+      summary: Zebra
+      responses:
+        "200":
+          description: OK
+  /apple:
+    get:
+      summary: Apple
+      responses:
+        "200":
+          description: OK
+  /mango:
+    get:
+      summary: Mango
+      responses:
+        "200":
+          description: OK
+`)
+		headings := p.ExtractHeadings(spec)
+
+		require.Len(t, headings, 3)
+		assert.Equal(t, "GET /apple", headings[0].Text)
+		assert.Equal(t, "GET /mango", headings[1].Text)
+		assert.Equal(t, "GET /zebra", headings[2].Text)
+	})
+
+	t.Run("tag with spaces gets slugged correctly", func(t *testing.T) {
+		p := New()
+		spec := []byte(`openapi: "3.0.3"
+info:
+  title: Multi Word Tags
+  version: "1.0.0"
+tags:
+  - name: Pet Store
+paths:
+  /pets:
+    get:
+      summary: List pets
+      tags:
+        - Pet Store
+      responses:
+        "200":
+          description: OK
+`)
+		headings := p.ExtractHeadings(spec)
+
+		require.NotEmpty(t, headings)
+		assert.Equal(t, "Pet Store", headings[0].Text)
+		assert.Equal(t, "tag/pet-store", headings[0].ID)
+		assert.Equal(t, "GET /pets", headings[1].Text)
+		assert.Equal(t, "tag/pet-store/GET/pets", headings[1].ID)
+	})
+
+	t.Run("spec with no paths returns tag headings only", func(t *testing.T) {
+		p := New()
+		spec := []byte(`openapi: "3.0.3"
+info:
+  title: Tags Only API
+  version: "1.0.0"
+tags:
+  - name: admin
+paths: {}
+`)
+		headings := p.ExtractHeadings(spec)
+
+		require.Len(t, headings, 1)
+		assert.Equal(t, "admin", headings[0].Text)
+		assert.Equal(t, "tag/admin", headings[0].ID)
+	})
+
+	t.Run("invalid spec returns nil", func(t *testing.T) {
+		p := New()
+		headings := p.ExtractHeadings([]byte("not a spec"))
+		assert.Nil(t, headings)
+	})
+}
+
 func TestProcessor_ToPlainText(t *testing.T) {
 	t.Run("extracts searchable text from YAML spec", func(t *testing.T) {
 		p := New()
@@ -202,6 +362,10 @@ func TestProcessor_ToPlainText(t *testing.T) {
 		assert.Contains(t, text, "Get a pet by ID")
 		assert.Contains(t, text, "pets")
 		assert.Contains(t, text, "Everything about your Pets")
+		// Operations are emitted as "METHOD path" lines.
+		assert.Contains(t, text, "GET /pets")
+		assert.Contains(t, text, "POST /pets")
+		assert.Contains(t, text, "GET /pets/{petId}")
 	})
 
 	t.Run("extracts searchable text from JSON spec", func(t *testing.T) {
