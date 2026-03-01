@@ -26,7 +26,7 @@ services:
       omnidex:
         condition: service_healthy
     volumes:
-      - ./docs/sample:/docs:ro
+      - .:/repo:ro
     environment:
       OMNIDEX_API_KEY: "${API_API_KEYS:-changeme}"
     entrypoint:
@@ -35,13 +35,13 @@ services:
       - --url
       - http://omnidex:8080
       - --docs-path
-      - /docs
+      - /repo
       - --file-pattern
-      - "**/*.{md,yaml,yml,json}"
+      - "docs/sample/**/*.{md,yaml,yml,json}"
       - --repo
-      - omnidex/omnidex
+      - ksysoev/omnidex
       - --commit-sha
-      - local
+      - main
     restart: "no"
 
 volumes:

@@ -19,6 +19,66 @@ func TestNew(t *testing.T) {
 	})
 }
 
+func TestGithubBlobURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		repo      string
+		path      string
+		commitSHA string
+		expected  string
+	}{
+		{
+			name:      "with commit SHA",
+			repo:      "my-org/repo",
+			path:      "docs/guide.md",
+			commitSHA: "abc123def456",
+			expected:  "https://github.com/my-org/repo/blob/abc123def456/docs/guide.md",
+		},
+		{
+			name:      "empty CommitSHA falls back to main",
+			repo:      "my-org/repo",
+			path:      "README.md",
+			commitSHA: "",
+			expected:  "https://github.com/my-org/repo/blob/main/README.md",
+		},
+		{
+			name:      "path with spaces is percent-encoded",
+			repo:      "my-org/repo",
+			path:      "docs/my file.md",
+			commitSHA: "abc123",
+			expected:  "https://github.com/my-org/repo/blob/abc123/docs/my%20file.md",
+		},
+		{
+			name:      "path with hash is percent-encoded",
+			repo:      "my-org/repo",
+			path:      "docs/file#1.md",
+			commitSHA: "abc123",
+			expected:  "https://github.com/my-org/repo/blob/abc123/docs/file%231.md",
+		},
+		{
+			name:      "path with question mark is percent-encoded",
+			repo:      "my-org/repo",
+			path:      "docs/what?.md",
+			commitSHA: "abc123",
+			expected:  "https://github.com/my-org/repo/blob/abc123/docs/what%3F.md",
+		},
+		{
+			name:      "nested path with safe characters is unchanged",
+			repo:      "owner/project",
+			path:      "a/b/c/readme.md",
+			commitSHA: "deadbeef",
+			expected:  "https://github.com/owner/project/blob/deadbeef/a/b/c/readme.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := githubBlobURL(tt.repo, tt.path, tt.commitSHA)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 func TestRenderHome_FullPage(t *testing.T) {
 	r := New()
 
@@ -164,6 +224,7 @@ func TestRenderDoc_FullPage(t *testing.T) {
 	assert.Contains(t, output, "On this page")
 	assert.Contains(t, output, "Installation")
 	assert.Contains(t, output, "data-toc-link")
+	assert.Contains(t, output, "https://github.com/my-org/repo/blob/abc123/getting-started.md", "View source link should use CommitSHA")
 }
 
 func TestRenderDoc_Partial(t *testing.T) {
@@ -460,6 +521,7 @@ func TestRenderDoc_OpenAPI_FullPage(t *testing.T) {
 	assert.Contains(t, output, "@scalar/api-reference")
 	assert.Contains(t, output, "Petstore API")
 	assert.NotContains(t, output, "On this page", "OpenAPI docs should not show markdown TOC")
+	assert.Contains(t, output, "https://github.com/my-org/repo/blob/main/petstore.yaml", "View source link should fall back to main when CommitSHA is empty")
 }
 
 func TestRenderDoc_OpenAPI_SpecJSONNotCorrupted(t *testing.T) {
@@ -550,4 +612,44 @@ func TestRenderDoc_MarkdownDefault_WhenContentTypeEmpty(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "prose")
 	assert.NotContains(t, output, "scalar-api-reference")
+}
+
+func TestRenderDoc_ViewSourceLink(t *testing.T) {
+	r := New()
+
+	tests := []struct {
+		name        string
+		commitSHA   string
+		expectedURL string
+	}{
+		{
+			name:        "with CommitSHA uses exact SHA in link",
+			commitSHA:   "deadbeef1234",
+			expectedURL: "https://github.com/my-org/repo/blob/deadbeef1234/docs/intro.md",
+		},
+		{
+			name:        "empty CommitSHA falls back to main branch",
+			commitSHA:   "",
+			expectedURL: "https://github.com/my-org/repo/blob/main/docs/intro.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := core.Document{
+				ID:        "my-org/repo/docs/intro.md",
+				Repo:      "my-org/repo",
+				Path:      "docs/intro.md",
+				Title:     "Introduction",
+				CommitSHA: tt.commitSHA,
+			}
+
+			var buf bytes.Buffer
+
+			err := r.RenderDoc(&buf, doc, []byte("<p>Intro</p>"), nil, nil, false)
+			require.NoError(t, err)
+
+			assert.Contains(t, buf.String(), tt.expectedURL)
+		})
+	}
 }

@@ -5,11 +5,31 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/url"
+	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/ksysoev/omnidex/pkg/core"
 )
+
+// githubBlobURL constructs a GitHub blob URL for viewing a file at a specific commit.
+// If commitSHA is empty, it falls back to the "main" branch.
+// Each segment of path is percent-encoded to handle spaces and reserved characters
+// (e.g. '#', '?') while preserving the slash separators.
+func githubBlobURL(repo, path, commitSHA string) string {
+	ref := commitSHA
+	if ref == "" {
+		ref = "main"
+	}
+
+	segments := strings.Split(path, "/")
+	for i, seg := range segments {
+		segments[i] = url.PathEscape(seg)
+	}
+
+	return "https://github.com/" + repo + "/blob/" + ref + "/" + strings.Join(segments, "/")
+}
 
 // fragmentPolicy is a bluemonday policy that allows only <mark> tags in search fragments.
 // This lets Bleve's highlight markers render as real HTML while stripping any other markup.
@@ -62,6 +82,7 @@ func New() *Renderer {
 				return tocIndentDefault
 			}
 		},
+		"githubURL": githubBlobURL,
 	}
 
 	return &Renderer{
