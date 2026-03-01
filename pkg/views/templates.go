@@ -256,7 +256,7 @@ const layoutHeader = `<!DOCTYPE html>
                 var rect = viewport.getBoundingClientRect();
                 var cx = e.clientX - rect.left;
                 var cy = e.clientY - rect.top;
-                var delta = e.deltaY < 0 ? 1.12 : (1 / 1.12);
+                var delta = e.deltaY < 0 ? 1.06 : (1 / 1.06);
                 applyZoom(delta, cx, cy);
             }
             function onKeyDown(e) {
