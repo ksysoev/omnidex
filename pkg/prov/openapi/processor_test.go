@@ -189,7 +189,7 @@ paths:
 	}
 }
 
-func TestGithubSlug(t *testing.T) {
+func TestGitHubSlug(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string

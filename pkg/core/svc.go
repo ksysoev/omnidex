@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // docStore defines the interface for document persistence operations.
@@ -431,7 +432,7 @@ func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string,
 
 	headings := processor.ExtractHeadings([]byte(doc.Content))
 	if len(headings) == 0 {
-		// Content type does not support heading navigation (e.g. OpenAPI).
+		// Content type does not support heading navigation.
 		return "", nil
 	}
 
@@ -504,26 +505,27 @@ func findAnchorAtPosition(plainText string, headings []Heading, fragIdx int) str
 const bleveEllipsis = "…"
 
 // caseInsensitiveIndex returns the byte offset of the first case-insensitive
-// occurrence of substr in s, searching the original string directly so that
-// the returned offset is always valid in s regardless of Unicode case folding
-// (e.g. Turkish dotless-i or German eszett where ToLower can change byte length).
+// occurrence of substr in s. It advances rune by rune through s and compares
+// each window using strings.EqualFold, so the returned offset is always a
+// valid byte position in the original string regardless of Unicode case folding.
 // Returns -1 if substr is not found or substr is empty.
 func caseInsensitiveIndex(s, substr string) int {
 	if substr == "" {
 		return -1
 	}
 
-	re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(substr))
-	if err != nil {
-		return -1
+	n := len(substr)
+
+	for i := 0; i+n <= len(s); {
+		if strings.EqualFold(s[i:i+n], substr) {
+			return i
+		}
+
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
 	}
 
-	loc := re.FindStringIndex(s)
-	if loc == nil {
-		return -1
-	}
-
-	return loc[0]
+	return -1
 }
 
 // fragmentMatchIndex locates the first <mark>-ed term from a Bleve highlight
