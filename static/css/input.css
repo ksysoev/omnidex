@@ -41,17 +41,21 @@
   margin-left: 0.4em;
   color: #9ca3af;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease, color 0.15s ease;
   text-decoration: none;
   vertical-align: middle;
 }
 .prose h1:hover .heading-anchor,
 .prose h2:hover .heading-anchor,
-.prose h3:hover .heading-anchor { opacity: 1; }
+.prose h3:hover .heading-anchor { opacity: 1; pointer-events: auto; }
 .prose .heading-anchor:hover,
 .prose .heading-anchor:focus,
-.prose .heading-anchor:focus-visible { color: #2563eb; opacity: 1; }
-.prose .heading-anchor.copied { color: #16a34a; opacity: 1; }
+.prose .heading-anchor:focus-visible { color: #2563eb; opacity: 1; pointer-events: auto; }
+.prose .heading-anchor.copied { color: #16a34a; opacity: 1; pointer-events: auto; }
+@media (hover: none) {
+  .prose .heading-anchor { opacity: 1; pointer-events: auto; }
+}
 
 /* ========================================================================
    Scalar API Reference — match Omnidex design language
