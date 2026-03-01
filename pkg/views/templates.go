@@ -34,6 +34,21 @@ const layoutHeader = `<!DOCTYPE html>
                 }
             });
         }
+        function scrollToHash() {
+            var hash = window.location.hash;
+            if (hash && hash.charAt(0) === '#') {
+                var id = hash.slice(1);
+                try { id = decodeURIComponent(id); } catch (e) { /* use raw id */ }
+                var target = document.getElementById(id);
+                if (target) {
+                    var scrollBehavior = 'smooth';
+                    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                        scrollBehavior = 'auto';
+                    }
+                    target.scrollIntoView({behavior: scrollBehavior});
+                }
+            }
+        }
         function initScrollSpy() {
             if (window._tocObserver) {
                 window._tocObserver.disconnect();
@@ -71,19 +86,6 @@ const layoutHeader = `<!DOCTYPE html>
             headings.forEach(function(h) {
                 window._tocObserver.observe(h);
             });
-            var hash = window.location.hash;
-            if (hash && hash.charAt(0) === '#') {
-                var id = hash.slice(1);
-                try { id = decodeURIComponent(id); } catch (e) { /* use raw id */ }
-                var target = document.getElementById(id);
-                if (target) {
-                    var scrollBehavior = 'smooth';
-                    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                        scrollBehavior = 'auto';
-                    }
-                    target.scrollIntoView({behavior: scrollBehavior});
-                }
-            }
         }
         function initHeadingAnchors() {
             var content = document.getElementById('doc-content');
@@ -134,7 +136,7 @@ const layoutHeader = `<!DOCTYPE html>
                 h.appendChild(anchor);
             });
         }
-        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); initHeadingAnchors(); });
+        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); scrollToHash(); initHeadingAnchors(); });
         document.addEventListener('htmx:afterSwap', function(event) {
             if (typeof mermaid !== 'undefined') {
                 var target = event.detail.elt;
@@ -142,6 +144,7 @@ const layoutHeader = `<!DOCTYPE html>
                 if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}).catch(function(e) { console.error('Mermaid rendering failed:', e); }); }
             }
             initScrollSpy();
+            scrollToHash();
             initHeadingAnchors();
         });
     </script>

@@ -54,13 +54,13 @@ func TestStripMarkTags(t *testing.T) {
 	}
 }
 
-func TestFindAnchorForFragment(t *testing.T) {
+func TestFindAnchorAtPosition(t *testing.T) {
 	tests := []struct {
 		name      string
 		plainText string
-		fragment  string
 		expected  string
 		headings  []Heading
+		fragIdx   int
 	}{
 		{
 			name:      "fragment in second section",
@@ -69,7 +69,7 @@ func TestFindAnchorForFragment(t *testing.T) {
 				{ID: "introduction", Text: "Introduction", Level: 1},
 				{ID: "setup", Text: "Setup", Level: 2},
 			},
-			fragment: "How to set up",
+			fragIdx:  35,
 			expected: "setup",
 		},
 		{
@@ -79,7 +79,7 @@ func TestFindAnchorForFragment(t *testing.T) {
 				{ID: "introduction", Text: "Introduction", Level: 1},
 				{ID: "setup", Text: "Setup", Level: 2},
 			},
-			fragment: "intro text",
+			fragIdx:  18,
 			expected: "introduction",
 		},
 		{
@@ -88,33 +88,15 @@ func TestFindAnchorForFragment(t *testing.T) {
 			headings: []Heading{
 				{ID: "introduction", Text: "Introduction", Level: 1},
 			},
-			fragment: "preamble content",
-			expected: "",
-		},
-		{
-			name:      "fragment not found in plain text",
-			plainText: "Introduction\nSome text",
-			headings: []Heading{
-				{ID: "introduction", Text: "Introduction", Level: 1},
-			},
-			fragment: "completely missing",
+			fragIdx:  0,
 			expected: "",
 		},
 		{
 			name:      "no headings",
 			plainText: "just some content without headings",
 			headings:  []Heading{},
-			fragment:  "some content",
+			fragIdx:   5,
 			expected:  "",
-		},
-		{
-			name:      "case-insensitive fallback",
-			plainText: "Overview\nThe API Overview section explains things",
-			headings: []Heading{
-				{ID: "overview", Text: "Overview", Level: 1},
-			},
-			fragment: "API OVERVIEW SECTION",
-			expected: "overview",
 		},
 		{
 			name:      "fragment in last of three sections",
@@ -124,7 +106,7 @@ func TestFindAnchorForFragment(t *testing.T) {
 				{ID: "beta", Text: "Beta", Level: 2},
 				{ID: "gamma", Text: "Gamma", Level: 2},
 			},
-			fragment: "gamma content",
+			fragIdx:  44,
 			expected: "gamma",
 		},
 		{
@@ -134,7 +116,7 @@ func TestFindAnchorForFragment(t *testing.T) {
 				{ID: "", Text: "Alpha", Level: 1},
 				{ID: "beta", Text: "Beta", Level: 2},
 			},
-			fragment: "alpha content",
+			fragIdx:  6,
 			expected: "",
 		},
 		{
@@ -144,14 +126,14 @@ func TestFindAnchorForFragment(t *testing.T) {
 				{ID: "config", Text: "Config", Level: 2},
 				{ID: "config-1", Text: "Config", Level: 2},
 			},
-			fragment: "second config section",
+			fragIdx:  35,
 			expected: "config-1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := findAnchorForFragment(tt.plainText, tt.headings, tt.fragment)
+			got := findAnchorAtPosition(tt.plainText, tt.headings, tt.fragIdx)
 			assert.Equal(t, tt.expected, got)
 		})
 	}

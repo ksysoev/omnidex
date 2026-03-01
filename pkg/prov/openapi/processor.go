@@ -1,6 +1,6 @@
 // Package openapi provides an OpenAPI specification content processor.
 // It implements the core.ContentProcessor interface for indexing, searching,
-// and rendering OpenAPI specs (both YAML and JSON) using Swagger UI.
+// and rendering OpenAPI specs (both YAML and JSON) using Scalar API Reference.
 package openapi
 
 import (
@@ -24,7 +24,7 @@ type methodOperation struct {
 // Processor implements core.ContentProcessor for OpenAPI specifications.
 // It uses kin-openapi to parse specs and extract structured information for
 // search indexing and title extraction. HTML rendering returns the parsed spec
-// marshaled to JSON for consumption by Swagger UI.
+// marshaled to JSON for consumption by Scalar API Reference.
 type Processor struct{}
 
 // New creates a new OpenAPI Processor.
@@ -32,8 +32,8 @@ func New() *Processor {
 	return &Processor{}
 }
 
-// RenderHTML returns the raw OpenAPI spec as HTML-safe content for Swagger UI rendering.
-// The view layer is responsible for embedding this into a Swagger UI container.
+// RenderHTML returns the raw OpenAPI spec as HTML-safe content for Scalar API Reference rendering.
+// The view layer is responsible for embedding this into a Scalar API Reference container.
 // Headings are not extracted here because Scalar API Reference manages its own
 // client-side navigation and anchor generation.
 func (p *Processor) RenderHTML(src []byte) ([]byte, []core.Heading, error) {
@@ -42,7 +42,7 @@ func (p *Processor) RenderHTML(src []byte) ([]byte, []core.Heading, error) {
 		return nil, nil, fmt.Errorf("failed to parse OpenAPI spec: %w", err)
 	}
 
-	// Marshal the spec to JSON for Swagger UI consumption.
+	// Marshal the spec to JSON for Scalar API Reference consumption.
 	specJSON, err := json.Marshal(spec)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal OpenAPI spec to JSON: %w", err)
@@ -158,8 +158,8 @@ func (p *Processor) ToPlainText(src []byte) string {
 //   - Untagged:   "{METHOD}{path}"
 //
 // Headings are returned in the same order that ToPlainText emits their
-// corresponding text, so that findAnchorForFragment can map byte offsets
-// correctly.
+// corresponding text, so that byte offsets from fragmentMatchIndex map
+// correctly to section boundaries built by findAnchorAtPosition.
 func (p *Processor) ExtractHeadings(src []byte) []core.Heading {
 	spec, err := parseSpec(src)
 	if err != nil {

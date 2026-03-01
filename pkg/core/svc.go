@@ -447,30 +447,6 @@ func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string,
 	return findAnchorAtPosition(plainText, headings, fragIdx), nil
 }
 
-// findAnchorForFragment returns the ID of the heading whose section contains
-// the given text fragment. It works by locating each heading's text in the
-// plain text document to establish section boundaries, then checking which
-// section the fragment falls into.
-//
-// Returns an empty string when the fragment is found before the first heading
-// (i.e. in the document preamble) or when it is not found at all.
-func findAnchorForFragment(plainText string, headings []Heading, fragment string) string {
-	// Locate the fragment in the plain text.
-	fragIdx := strings.Index(plainText, fragment)
-	if fragIdx < 0 {
-		// Try a case-insensitive fallback for robustness.
-		lowerPlain := strings.ToLower(plainText)
-		lowerFrag := strings.ToLower(fragment)
-		fragIdx = strings.Index(lowerPlain, lowerFrag)
-	}
-
-	if fragIdx < 0 {
-		return ""
-	}
-
-	return findAnchorAtPosition(plainText, headings, fragIdx)
-}
-
 // findAnchorAtPosition returns the ID of the heading whose section contains
 // the character at fragIdx in plainText. It builds section boundaries by
 // locating each heading's text in document order, then returns the last
@@ -527,6 +503,29 @@ func findAnchorAtPosition(plainText string, headings []Heading, fragIdx int) str
 // with the document start or end.
 const bleveEllipsis = "…"
 
+// caseInsensitiveIndex returns the byte offset of the first case-insensitive
+// occurrence of substr in s, searching the original string directly so that
+// the returned offset is always valid in s regardless of Unicode case folding
+// (e.g. Turkish dotless-i or German eszett where ToLower can change byte length).
+// Returns -1 if substr is not found or substr is empty.
+func caseInsensitiveIndex(s, substr string) int {
+	if substr == "" {
+		return -1
+	}
+
+	re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(substr))
+	if err != nil {
+		return -1
+	}
+
+	loc := re.FindStringIndex(s)
+	if loc == nil {
+		return -1
+	}
+
+	return loc[0]
+}
+
 // fragmentMatchIndex locates the first <mark>-ed term from a Bleve highlight
 // fragment within plainText, returning its byte offset. Returns -1 if not found.
 //
@@ -553,7 +552,7 @@ func fragmentMatchIndex(rawFrag, plainText string) int {
 
 		idx := strings.Index(plainText, s)
 		if idx < 0 {
-			idx = strings.Index(strings.ToLower(plainText), strings.ToLower(s))
+			idx = caseInsensitiveIndex(plainText, s)
 		}
 
 		return idx
@@ -591,7 +590,7 @@ func fragmentMatchIndex(rawFrag, plainText string) int {
 
 	idx := strings.Index(plainText, locator)
 	if idx < 0 {
-		idx = strings.Index(strings.ToLower(plainText), strings.ToLower(locator))
+		idx = caseInsensitiveIndex(plainText, locator)
 		if idx >= 0 {
 			return idx + len(preMark)
 		}
@@ -599,7 +598,7 @@ func fragmentMatchIndex(rawFrag, plainText string) int {
 		// Context didn't match; fall back to the marked term alone.
 		idx = strings.Index(plainText, markedTerm)
 		if idx < 0 {
-			idx = strings.Index(strings.ToLower(plainText), strings.ToLower(markedTerm))
+			idx = caseInsensitiveIndex(plainText, markedTerm)
 		}
 
 		return idx
