@@ -34,7 +34,6 @@
 .toc-link.toc-active { color: #1d4ed8; border-left-color: #2563eb; }
 
 /* Heading anchor copy-link icon */
-.prose h1, .prose h2, .prose h3 { position: relative; }
 .prose .heading-anchor {
   display: inline-flex;
   align-items: center;
