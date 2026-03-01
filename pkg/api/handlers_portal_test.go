@@ -351,12 +351,12 @@ func TestSearchPage_WithQuery(t *testing.T) {
 	results := &core.SearchResults{
 		Hits: []core.SearchResult{
 			{
-				ID:        "owner/repo/docs/readme.md",
-				Repo:      "owner/repo",
-				Path:      "docs/readme.md",
-				Title:     "README",
-				Fragments: []string{"matching <em>content</em>"},
-				Score:     1.5,
+				ID:               "owner/repo/docs/readme.md",
+				Repo:             "owner/repo",
+				Path:             "docs/readme.md",
+				Title:            "README",
+				ContentFragments: []string{"matching <em>content</em>"},
+				Score:            1.5,
 			},
 		},
 		Total:    1,

@@ -610,7 +610,10 @@ func TestBleveEngine_SearchHighlightingWorks(t *testing.T) {
 	results, err := engine.Search(t.Context(), "markdown", core.SearchOpts{Limit: 10})
 	require.NoError(t, err)
 	require.NotEmpty(t, results.Hits)
-	assert.NotEmpty(t, results.Hits[0].Fragments, "search results should include highlight fragments")
+	assert.True(t,
+		len(results.Hits[0].TitleFragments) > 0 || len(results.Hits[0].ContentFragments) > 0,
+		"search results should include highlight fragments in title or content",
+	)
 }
 
 func TestBleveEngine_ListByRepo(t *testing.T) {

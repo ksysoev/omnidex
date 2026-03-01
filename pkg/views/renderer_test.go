@@ -257,12 +257,12 @@ func TestRenderSearch_FullPage(t *testing.T) {
 	results := &core.SearchResults{
 		Hits: []core.SearchResult{
 			{
-				ID:        "org/repo/doc.md",
-				Repo:      "org/repo",
-				Path:      "doc.md",
-				Title:     "My Document",
-				Fragments: []string{"matched fragment here"},
-				Score:     1.5,
+				ID:               "org/repo/doc.md",
+				Repo:             "org/repo",
+				Path:             "doc.md",
+				Title:            "My Document",
+				ContentFragments: []string{"matched fragment here"},
+				Score:            1.5,
 			},
 		},
 		Total:    1,
