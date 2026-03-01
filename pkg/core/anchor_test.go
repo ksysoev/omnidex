@@ -153,19 +153,20 @@ func TestFindAnchorAtPosition(t *testing.T) {
 
 func TestSkipPartialLeadingWord(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    string
 		expected string
 	}{
-		{"ntroduction\nSome content", "Some content"},
-		{"Introduction\nSome content", "Introduction\nSome content"},
-		{"\nSome content", "\nSome content"},
-		{"word", "word"},
-		{"", ""},
-		{"partial word rest", "word rest"},
+		{name: "missing leading char with newline", input: "ntroduction\nSome content", expected: "Some content"},
+		{name: "full word with newline", input: "Introduction\nSome content", expected: "Introduction\nSome content"},
+		{name: "leading newline only", input: "\nSome content", expected: "\nSome content"},
+		{name: "single word", input: "word", expected: "word"},
+		{name: "empty input", input: "", expected: ""},
+		{name: "partial leading word without newline", input: "partial word rest", expected: "word rest"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, skipPartialLeadingWord(tt.input))
 		})
 	}

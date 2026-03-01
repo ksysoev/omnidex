@@ -191,23 +191,24 @@ paths:
 
 func TestGitHubSlug(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    string
 		expected string
 	}{
-		{"pets", "pets"},
-		{"Pets", "pets"},
-		{"Pet Store", "pet-store"},
-		{"user authentication", "user-authentication"},
-		{"user/v2", "user-v2"},
-		{"My Tag!", "my-tag"},
-		{"", ""},
-		{"--leading--", "leading"},
-		{"  spaces  ", "spaces"},
-		{"123numbers", "123numbers"},
+		{name: "lowercase", input: "pets", expected: "pets"},
+		{name: "capitalized", input: "Pets", expected: "pets"},
+		{name: "with-space", input: "Pet Store", expected: "pet-store"},
+		{name: "multi-word", input: "user authentication", expected: "user-authentication"},
+		{name: "contains-slash", input: "user/v2", expected: "user-v2"},
+		{name: "with-punctuation", input: "My Tag!", expected: "my-tag"},
+		{name: "empty-string", input: "", expected: ""},
+		{name: "leading-dashes", input: "--leading--", expected: "leading"},
+		{name: "surrounding-spaces", input: "  spaces  ", expected: "spaces"},
+		{name: "starting-with-numbers", input: "123numbers", expected: "123numbers"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, githubSlug(tt.input))
 		})
 	}

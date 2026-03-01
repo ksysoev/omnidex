@@ -642,7 +642,14 @@ func fragmentMatchIndex(rawFrag, plainText string) int {
 	// to subtle whitespace differences.
 	const maxContextBytes = 120
 	if len(preMark) > maxContextBytes {
-		preMark = preMark[len(preMark)-maxContextBytes:]
+		start := len(preMark) - maxContextBytes
+		// Advance start to the next UTF-8 rune boundary so we never split a
+		// multi-byte rune, which would produce an invalid locator string.
+		for start < len(preMark) && !utf8.RuneStart(preMark[start]) {
+			start++
+		}
+
+		preMark = preMark[start:]
 	}
 
 	locator := preMark + markedTerm
