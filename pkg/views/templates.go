@@ -443,10 +443,13 @@ const layoutHeader = `<!DOCTYPE html>
                     } else {
                         _activeSvg.removeAttribute('style');
                     }
-                    _activeSvgParent.insertBefore(_activeSvg, _activeSvgParent.firstChild);
-                    // Remove the placeholder now that the original SVG is back.
+                    // Reinsert the SVG at the placeholder's position to preserve original ordering.
                     if (_activeSvgPlaceholder && _activeSvgPlaceholder.parentNode) {
+                        _activeSvgPlaceholder.parentNode.insertBefore(_activeSvg, _activeSvgPlaceholder);
                         _activeSvgPlaceholder.parentNode.removeChild(_activeSvgPlaceholder);
+                    } else {
+                        // Fallback: if no placeholder is available, insert as first child.
+                        _activeSvgParent.insertBefore(_activeSvg, _activeSvgParent.firstChild);
                     }
                     _activeSvgPlaceholder = null;
                 }
