@@ -3,6 +3,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -152,6 +153,88 @@ func TestFindAnchorForFragment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := findAnchorForFragment(tt.plainText, tt.headings, tt.fragment)
 			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestSkipPartialLeadingWord(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"ntroduction\nSome content", "Some content"},
+		{"Introduction\nSome content", "Introduction\nSome content"},
+		{"\nSome content", "\nSome content"},
+		{"word", "word"},
+		{"", ""},
+		{"partial word rest", "word rest"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, skipPartialLeadingWord(tt.input))
+		})
+	}
+}
+
+func TestFragmentMatchIndex(t *testing.T) {
+	// plainText mirrors what ToPlainText produces for a markdown document with three sections.
+	plainText := "Introduction\nThis is the introduction section with some content.\nSetup\nFollow these steps to set up the tool. Installation is straightforward.\nUsage\nAfter setup you can start using the tool immediately."
+
+	tests := []struct {
+		name     string
+		rawFrag  string
+		wantDesc string
+		wantIdx  int
+	}{
+		{
+			name:     "mark at document start, no ellipsis",
+			rawFrag:  "<mark>Introduction</mark>\nThis is the introduction section",
+			wantIdx:  0, // points at "Introduction"
+			wantDesc: "should resolve to start of Introduction heading",
+		},
+		{
+			name:     "bleve ellipsis with partial leading word, mark in setup section",
+			rawFrag:  "…ntroduction\nThis is the introduction section with some content.\nSetup\nFollow these steps to set up the tool. <mark>Installation</mark> is straightforward.\nUsage\nAfter setup you can start using the tool immediately…",
+			wantIdx:  110, // "Installation" offset in plainText
+			wantDesc: "should point at Installation (in Setup section)",
+		},
+		{
+			name:     "bleve ellipsis with partial leading word, mark is section heading",
+			rawFrag:  "…ntroduction\nThis is the introduction section with some content.\n<mark>Setup</mark>\nFollow these steps",
+			wantIdx:  65, // "Setup" offset in plainText
+			wantDesc: "should point at Setup heading",
+		},
+		{
+			name:     "bleve ellipsis, mark in usage section",
+			rawFrag:  "…ollow these steps to set up the tool. Installation is straightforward.\nUsage\nAfter setup you can start <mark>using</mark> the tool immediately…",
+			wantIdx:  175, // "using" offset
+			wantDesc: "should point at 'using' in Usage section",
+		},
+		{
+			name:     "no mark in fragment, strip ellipsis",
+			rawFrag:  "…some content.\nSetup\nFollow",
+			wantIdx:  strings.Index(plainText, "Setup\nFollow"),
+			wantDesc: "falls back to cleaned fragment start",
+		},
+		{
+			name:     "empty fragment",
+			rawFrag:  "",
+			wantIdx:  -1,
+			wantDesc: "empty fragment returns -1",
+		},
+		{
+			name:     "mark not found in plain text",
+			rawFrag:  "<mark>completely missing term</mark> rest of context",
+			wantIdx:  -1,
+			wantDesc: "returns -1 when term not in plain text",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := fragmentMatchIndex(tt.rawFrag, plainText)
+			assert.Equal(t, tt.wantIdx, got, tt.wantDesc)
 		})
 	}
 }

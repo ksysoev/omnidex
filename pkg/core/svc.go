@@ -437,15 +437,14 @@ func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string,
 
 	plainText := processor.ToPlainText([]byte(doc.Content))
 
-	// Strip highlight markers from the first fragment to get comparable plain text.
-	fragment := stripMarkTags(hit.ContentFragments[0])
-	fragment = strings.TrimSpace(fragment)
-
-	if fragment == "" {
+	// Locate the matched term's byte offset in the plain text.
+	// fragmentMatchIndex handles Bleve's ellipsis padding and mid-word cuts.
+	fragIdx := fragmentMatchIndex(hit.ContentFragments[0], plainText)
+	if fragIdx < 0 {
 		return "", nil
 	}
 
-	return findAnchorForFragment(plainText, headings, fragment), nil
+	return findAnchorAtPosition(plainText, headings, fragIdx), nil
 }
 
 // findAnchorForFragment returns the ID of the heading whose section contains
@@ -469,10 +468,17 @@ func findAnchorForFragment(plainText string, headings []Heading, fragment string
 		return ""
 	}
 
-	// Build a slice of (offset, headingID) pairs by finding each heading's
-	// text in the plain text. We iterate in document order and search only in
-	// the portion of the text that follows the previous heading to handle
-	// duplicate heading texts correctly.
+	return findAnchorAtPosition(plainText, headings, fragIdx)
+}
+
+// findAnchorAtPosition returns the ID of the heading whose section contains
+// the character at fragIdx in plainText. It builds section boundaries by
+// locating each heading's text in document order, then returns the last
+// boundary whose offset is ≤ fragIdx.
+//
+// Returns an empty string when fragIdx falls before the first heading or no
+// valid boundaries can be established.
+func findAnchorAtPosition(plainText string, headings []Heading, fragIdx int) string {
 	type sectionBoundary struct {
 		id     string
 		offset int
@@ -514,4 +520,131 @@ func findAnchorForFragment(plainText string, headings []Heading, fragment string
 	}
 
 	return anchor
+}
+
+// bleveEllipsis is the Unicode ellipsis character (U+2026) that Bleve's
+// SimpleFragmenter prepends/appends when a fragment window does not align
+// with the document start or end.
+const bleveEllipsis = "…"
+
+// fragmentMatchIndex locates the first <mark>-ed term from a Bleve highlight
+// fragment within plainText, returning its byte offset. Returns -1 if not found.
+//
+// Bleve's SimpleFragmenter may:
+//   - Prefix the fragment with "…" (U+2026) when the window doesn't start at
+//     the document beginning.
+//   - Cut the content mid-word right after the "…" (e.g. "…ntroduction").
+//
+// This function strips the ellipsis and any resulting partial leading word,
+// builds a locator string of (cleaned context before mark) + (marked term),
+// finds that locator in plainText, and returns the offset pointing AT the
+// marked term — not the start of the surrounding context window.
+func fragmentMatchIndex(rawFrag, plainText string) int {
+	markOpen := strings.Index(rawFrag, "<mark>")
+	if markOpen < 0 {
+		// No marks: fall back to stripping everything and trimming ellipsis.
+		s := strings.TrimLeft(stripMarkTags(rawFrag), bleveEllipsis)
+		s = skipPartialLeadingWord(s)
+		s = strings.TrimSpace(s)
+
+		if s == "" {
+			return -1
+		}
+
+		idx := strings.Index(plainText, s)
+		if idx < 0 {
+			idx = strings.Index(strings.ToLower(plainText), strings.ToLower(s))
+		}
+
+		return idx
+	}
+
+	// Extract the marked (matched) term.
+	afterOpen := rawFrag[markOpen+len("<mark>"):]
+
+	closeIdx := strings.Index(afterOpen, "</mark>")
+	if closeIdx < 0 {
+		return -1
+	}
+
+	markedTerm := afterOpen[:closeIdx]
+
+	// Build cleaned context before the mark.
+	// The pre-mark text may start with "…" and a partial word; strip both.
+	preMark := rawFrag[:markOpen]
+	hadEllipsis := strings.HasPrefix(preMark, bleveEllipsis)
+	preMark = strings.TrimLeft(preMark, bleveEllipsis)
+
+	if hadEllipsis {
+		// After stripping "…" the first "word" may be a partial word fragment.
+		preMark = skipPartialLeadingWord(preMark)
+	}
+
+	// Limit context length to avoid very long locators that might fail due
+	// to subtle whitespace differences.
+	const maxContextBytes = 120
+	if len(preMark) > maxContextBytes {
+		preMark = preMark[len(preMark)-maxContextBytes:]
+	}
+
+	locator := preMark + markedTerm
+
+	idx := strings.Index(plainText, locator)
+	if idx < 0 {
+		idx = strings.Index(strings.ToLower(plainText), strings.ToLower(locator))
+		if idx >= 0 {
+			return idx + len(preMark)
+		}
+
+		// Context didn't match; fall back to the marked term alone.
+		idx = strings.Index(plainText, markedTerm)
+		if idx < 0 {
+			idx = strings.Index(strings.ToLower(plainText), strings.ToLower(markedTerm))
+		}
+
+		return idx
+	}
+
+	// Return the position of the marked term within the plain text.
+	return idx + len(preMark)
+}
+
+// skipPartialLeadingWord advances s past the first line when s starts with a
+// lowercase letter, indicating that Bleve cut the content mid-word immediately
+// after "…". Uppercase, digit, or whitespace at the start means the content
+// already begins at a word boundary and the string is returned unchanged.
+//
+// When skipping, the function advances to the character after the first newline
+// so that a partial trailing line such as "ome content.\nSetup\n…" is consumed
+// as a unit rather than leaving "content.\n…" as a misleading prefix.
+// If no newline is present it falls back to the first space or tab.
+func skipPartialLeadingWord(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// If s starts with whitespace it is already at a word boundary.
+	if s[0] == ' ' || s[0] == '\t' || s[0] == '\n' || s[0] == '\r' {
+		return s
+	}
+
+	// Only skip when the first character is a lowercase ASCII letter, which is
+	// the tell-tale sign of a Bleve mid-word cut (e.g. "…ntroduction").
+	if s[0] < 'a' || s[0] > 'z' {
+		return s
+	}
+
+	// Advance past the first newline to discard the entire partial line.
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		return s[idx+1:]
+	}
+
+	// No newline — fall back to the first horizontal whitespace character.
+	if idx := strings.IndexAny(s, " \t\r"); idx > 0 {
+		return s[idx+1:]
+	}
+
+	// No boundary found — the entire string might be a single partial word;
+	// return as-is so callers can still attempt a lookup.
+	return s
 }
