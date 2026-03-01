@@ -85,7 +85,44 @@ const layoutHeader = `<!DOCTYPE html>
                 }
             }
         }
-        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); });
+        function initHeadingAnchors() {
+            var content = document.getElementById('doc-content');
+            if (!content) return;
+            var headings = content.querySelectorAll('.prose h1[id], .prose h2[id], .prose h3[id]');
+            headings.forEach(function(h) {
+                if (h.querySelector('.heading-anchor')) return;
+                var id = h.id;
+                var anchor = document.createElement('a');
+                anchor.className = 'heading-anchor';
+                anchor.href = '#' + id;
+                anchor.setAttribute('aria-label', 'Copy link to section');
+                anchor.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+                anchor.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var url = window.location.origin + window.location.pathname + '#' + id;
+                    var done = function() {
+                        anchor.classList.add('copied');
+                        setTimeout(function() { anchor.classList.remove('copied'); }, 2000);
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url).then(done).catch(function() {
+                            window.location.hash = id;
+                        });
+                    } else {
+                        var ta = document.createElement('textarea');
+                        ta.value = url;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        try { document.execCommand('copy'); done(); } catch(ex) { window.location.hash = id; }
+                        document.body.removeChild(ta);
+                    }
+                });
+                h.appendChild(anchor);
+            });
+        }
+        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); initHeadingAnchors(); });
         document.addEventListener('htmx:afterSwap', function(event) {
             if (typeof mermaid !== 'undefined') {
                 var target = event.detail.elt;
@@ -93,6 +130,7 @@ const layoutHeader = `<!DOCTYPE html>
                 if (nodes.length > 0) { mermaid.run({nodes: Array.from(nodes)}).catch(function(e) { console.error('Mermaid rendering failed:', e); }); }
             }
             initScrollSpy();
+            initHeadingAnchors();
         });
     </script>
 </head>

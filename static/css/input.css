@@ -33,6 +33,24 @@
 /* TOC scroll spy active state */
 .toc-link.toc-active { color: #1d4ed8; border-left-color: #2563eb; }
 
+/* Heading anchor copy-link icon */
+.prose h1, .prose h2, .prose h3 { position: relative; }
+.heading-anchor {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4em;
+  color: #9ca3af;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+  vertical-align: middle;
+}
+.prose h1:hover .heading-anchor,
+.prose h2:hover .heading-anchor,
+.prose h3:hover .heading-anchor { opacity: 1; }
+.heading-anchor:hover { color: #2563eb; }
+.heading-anchor.copied { color: #16a34a; opacity: 1; }
+
 /* ========================================================================
    Scalar API Reference — match Omnidex design language
    Scalar uses CSS custom properties for theming. We override them to align
