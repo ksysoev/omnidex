@@ -136,7 +136,7 @@ const layoutHeader = `<!DOCTYPE html>
                 h.appendChild(anchor);
             });
         }
-        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); scrollToHash(); initHeadingAnchors(); });
+        document.addEventListener('DOMContentLoaded', function() { initScrollSpy(); scrollToHash(); initHeadingAnchors(); initMermaidExpand(); });
         document.addEventListener('htmx:afterSwap', function(event) {
             if (typeof mermaid !== 'undefined') {
                 var target = event.detail.elt;
@@ -146,7 +146,227 @@ const layoutHeader = `<!DOCTYPE html>
             initScrollSpy();
             scrollToHash();
             initHeadingAnchors();
+            initMermaidExpand();
         });
+        document.addEventListener('htmx:beforeSwap', function() { closeMermaidModal(); });
+
+        /* ================================================================
+           Mermaid diagram fullscreen viewer
+           ================================================================ */
+        (function() {
+            var modal, viewport, canvas, zoomLabel;
+            var scale = 1, tx = 0, ty = 0;
+            var minScale = 0.05, maxScale = 20;
+            var isPanning = false, panStartX = 0, panStartY = 0, panStartTx = 0, panStartTy = 0;
+            var pinchStartDist = 0, pinchStartScale = 1, pinchStartTx = 0, pinchStartTy = 0;
+            var modalOpen = false;
+            var _boundMouseMove, _boundMouseUp, _boundWheel, _boundKeyDown, _boundTouchMove, _boundTouchEnd;
+
+            function getModal() {
+                if (!modal) {
+                    modal    = document.getElementById('mermaid-modal');
+                    viewport = document.getElementById('mermaid-modal-viewport');
+                    canvas   = document.getElementById('mermaid-modal-canvas');
+                    zoomLabel = document.getElementById('mermaid-zoom-level');
+                    var closeBtn  = document.getElementById('mermaid-modal-close');
+                    var zoomIn    = document.getElementById('mermaid-zoom-in');
+                    var zoomOut   = document.getElementById('mermaid-zoom-out');
+                    var zoomReset = document.getElementById('mermaid-zoom-reset');
+                    if (closeBtn)  closeBtn.addEventListener('click', closeMermaidModal);
+                    if (zoomIn)    zoomIn.addEventListener('click', function() { applyZoom(1.25, viewport.clientWidth / 2, viewport.clientHeight / 2); });
+                    if (zoomOut)   zoomOut.addEventListener('click', function() { applyZoom(0.8, viewport.clientWidth / 2, viewport.clientHeight / 2); });
+                    if (zoomReset) zoomReset.addEventListener('click', fitToScreen);
+                    if (modal) {
+                        modal.addEventListener('click', function(e) {
+                            if (e.target === modal || e.target === viewport) { closeMermaidModal(); }
+                        });
+                    }
+                }
+                return !!modal;
+            }
+
+            function applyTransform() {
+                if (!canvas) return;
+                canvas.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+                if (zoomLabel) { zoomLabel.textContent = Math.round(scale * 100) + '%'; }
+            }
+
+            function applyZoom(factor, cx, cy) {
+                var newScale = Math.min(maxScale, Math.max(minScale, scale * factor));
+                var ratio = newScale / scale;
+                tx = cx - ratio * (cx - tx);
+                ty = cy - ratio * (cy - ty);
+                scale = newScale;
+                applyTransform();
+            }
+
+            function fitToScreen() {
+                if (!canvas || !viewport) return;
+                var svg = canvas.querySelector('svg');
+                if (!svg) return;
+                var vw = viewport.clientWidth  - 64;
+                var vh = viewport.clientHeight - 64;
+                var sw = svg.getAttribute('width')  ? parseFloat(svg.getAttribute('width'))  : svg.viewBox.baseVal.width;
+                var sh = svg.getAttribute('height') ? parseFloat(svg.getAttribute('height')) : svg.viewBox.baseVal.height;
+                if (!sw || !sh) { sw = svg.getBoundingClientRect().width; sh = svg.getBoundingClientRect().height; }
+                if (!sw || !sh) { sw = vw; sh = vh; }
+                var fitScale = Math.min(vw / sw, vh / sh, 1);
+                scale = fitScale;
+                tx = (viewport.clientWidth  - sw * scale) / 2;
+                ty = (viewport.clientHeight - sh * scale) / 2;
+                applyTransform();
+            }
+
+            function onMouseDown(e) {
+                if (e.button !== 0) return;
+                isPanning = true;
+                panStartX = e.clientX; panStartY = e.clientY;
+                panStartTx = tx; panStartTy = ty;
+                viewport.classList.add('is-panning');
+                e.preventDefault();
+            }
+            function onMouseMove(e) {
+                if (!isPanning) return;
+                tx = panStartTx + (e.clientX - panStartX);
+                ty = panStartTy + (e.clientY - panStartY);
+                applyTransform();
+            }
+            function onMouseUp() {
+                if (!isPanning) return;
+                isPanning = false;
+                if (viewport) viewport.classList.remove('is-panning');
+            }
+            function onWheel(e) {
+                e.preventDefault();
+                var rect = viewport.getBoundingClientRect();
+                var cx = e.clientX - rect.left;
+                var cy = e.clientY - rect.top;
+                var delta = e.deltaY < 0 ? 1.12 : (1 / 1.12);
+                applyZoom(delta, cx, cy);
+            }
+            function onKeyDown(e) {
+                if (!modalOpen) return;
+                switch (e.key) {
+                    case 'Escape': closeMermaidModal(); break;
+                    case '+': case '=': e.preventDefault(); applyZoom(1.25, viewport.clientWidth / 2, viewport.clientHeight / 2); break;
+                    case '-': e.preventDefault(); applyZoom(0.8, viewport.clientWidth / 2, viewport.clientHeight / 2); break;
+                    case '0': e.preventDefault(); fitToScreen(); break;
+                    case 'ArrowLeft':  e.preventDefault(); tx -= 40; applyTransform(); break;
+                    case 'ArrowRight': e.preventDefault(); tx += 40; applyTransform(); break;
+                    case 'ArrowUp':    e.preventDefault(); ty -= 40; applyTransform(); break;
+                    case 'ArrowDown':  e.preventDefault(); ty += 40; applyTransform(); break;
+                }
+            }
+            function getTouchDist(touches) {
+                var dx = touches[0].clientX - touches[1].clientX;
+                var dy = touches[0].clientY - touches[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+            function onTouchStart(e) {
+                if (e.touches.length === 1) {
+                    isPanning = true;
+                    panStartX = e.touches[0].clientX; panStartY = e.touches[0].clientY;
+                    panStartTx = tx; panStartTy = ty;
+                } else if (e.touches.length === 2) {
+                    isPanning = false;
+                    pinchStartDist  = getTouchDist(e.touches);
+                    pinchStartScale = scale;
+                    pinchStartTx = tx; pinchStartTy = ty;
+                }
+                e.preventDefault();
+            }
+            function onTouchMove(e) {
+                if (e.touches.length === 1 && isPanning) {
+                    tx = panStartTx + (e.touches[0].clientX - panStartX);
+                    ty = panStartTy + (e.touches[0].clientY - panStartY);
+                    applyTransform();
+                } else if (e.touches.length === 2) {
+                    var dist = getTouchDist(e.touches);
+                    var factor = dist / pinchStartDist;
+                    var newScale = Math.min(maxScale, Math.max(minScale, pinchStartScale * factor));
+                    var midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - viewport.getBoundingClientRect().left;
+                    var midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - viewport.getBoundingClientRect().top;
+                    var ratio = newScale / pinchStartScale;
+                    tx = midX - ratio * (midX - pinchStartTx);
+                    ty = midY - ratio * (midY - pinchStartTy);
+                    scale = newScale;
+                    applyTransform();
+                }
+                e.preventDefault();
+            }
+            function onTouchEnd(e) {
+                if (e.touches.length === 0) { isPanning = false; }
+            }
+
+            window.openMermaidModal = function(svgEl) {
+                if (!getModal()) return;
+                var clone = svgEl.cloneNode(true);
+                clone.removeAttribute('style');
+                canvas.innerHTML = '';
+                canvas.appendChild(clone);
+                scale = 1; tx = 0; ty = 0;
+                applyTransform();
+                modal.classList.add('is-open');
+                document.body.style.overflow = 'hidden';
+                modalOpen = true;
+                requestAnimationFrame(function() { fitToScreen(); viewport.focus(); });
+                _boundMouseMove = onMouseMove;
+                _boundMouseUp   = onMouseUp;
+                _boundWheel     = onWheel;
+                _boundKeyDown   = onKeyDown;
+                _boundTouchMove = onTouchMove;
+                _boundTouchEnd  = onTouchEnd;
+                viewport.addEventListener('mousedown',  onMouseDown);
+                document.addEventListener('mousemove',  _boundMouseMove);
+                document.addEventListener('mouseup',    _boundMouseUp);
+                viewport.addEventListener('wheel',      _boundWheel, { passive: false });
+                document.addEventListener('keydown',    _boundKeyDown);
+                viewport.addEventListener('touchstart', onTouchStart, { passive: false });
+                viewport.addEventListener('touchmove',  _boundTouchMove, { passive: false });
+                viewport.addEventListener('touchend',   _boundTouchEnd);
+            };
+
+            window.closeMermaidModal = function() {
+                if (!modalOpen || !getModal()) return;
+                modal.classList.remove('is-open');
+                document.body.style.overflow = '';
+                modalOpen = false;
+                isPanning = false;
+                canvas.innerHTML = '';
+                viewport.removeEventListener('mousedown',  onMouseDown);
+                document.removeEventListener('mousemove',  _boundMouseMove);
+                document.removeEventListener('mouseup',    _boundMouseUp);
+                viewport.removeEventListener('wheel',      _boundWheel);
+                document.removeEventListener('keydown',    _boundKeyDown);
+                viewport.removeEventListener('touchstart', onTouchStart);
+                viewport.removeEventListener('touchmove',  _boundTouchMove);
+                viewport.removeEventListener('touchend',   _boundTouchEnd);
+            };
+        }());
+
+        function initMermaidExpand() {
+            var containers = document.querySelectorAll('.prose pre.mermaid');
+            containers.forEach(function(pre) {
+                if (pre.querySelector('.mermaid-expand-btn')) return;
+                var btn = document.createElement('button');
+                btn.className = 'mermaid-expand-btn';
+                btn.setAttribute('aria-label', 'View diagram fullscreen');
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg><span>Expand</span>';
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var svg = pre.querySelector('svg');
+                    if (svg) { window.openMermaidModal(svg); }
+                });
+                pre.appendChild(btn);
+                var svg = pre.querySelector('svg');
+                if (svg) return;
+                var obs = new MutationObserver(function(mutations, observer) {
+                    var s = pre.querySelector('svg');
+                    if (s) { observer.disconnect(); }
+                });
+                obs.observe(pre, { childList: true, subtree: true });
+            });
+        }
     </script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -169,6 +389,28 @@ const layoutFooter = `</main>
     <footer class="border-t border-gray-200 py-6 text-center text-sm text-gray-500">
         <p>Powered by Omnidex</p>
     </footer>
+
+    <!-- Mermaid diagram fullscreen viewer modal -->
+    <div id="mermaid-modal" role="dialog" aria-modal="true" aria-label="Diagram viewer">
+        <div id="mermaid-modal-header">
+            <button id="mermaid-modal-close" aria-label="Close diagram viewer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div id="mermaid-modal-viewport" tabindex="-1">
+            <div id="mermaid-modal-canvas"></div>
+        </div>
+        <div id="mermaid-modal-controls">
+            <button class="mermaid-ctrl-btn" id="mermaid-zoom-in" aria-label="Zoom in">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+            <span id="mermaid-zoom-level" aria-live="polite" aria-label="Zoom level">100%</span>
+            <button class="mermaid-ctrl-btn" id="mermaid-zoom-out" aria-label="Zoom out">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+            <button class="mermaid-ctrl-btn" id="mermaid-zoom-reset" aria-label="Fit to screen" style="width: auto; padding: 0 0.5rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.02em;">Fit</button>
+        </div>
+    </div>
 </body>
 </html>`
 
