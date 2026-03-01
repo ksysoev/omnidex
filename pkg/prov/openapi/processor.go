@@ -95,8 +95,10 @@ func (p *Processor) ToPlainText(src []byte) string {
 	}
 
 	// Tag descriptions (in spec.Tags order, which preserves authoring intent).
+	// Only emit tags with non-empty names to match the ExtractHeadings guard,
+	// keeping byte offsets aligned between the two functions.
 	for _, tag := range spec.Tags {
-		if tag != nil {
+		if tag != nil && tag.Name != "" {
 			buf.WriteString(tag.Name)
 			buf.WriteByte('\n')
 
@@ -227,6 +229,12 @@ func operationAnchorID(op *openapi3.Operation, method, path string) string {
 // the npm github-slugger package used by Scalar API Reference. It lowercases
 // the input, replaces runs of non-alphanumeric characters with a single hyphen,
 // and trims leading/trailing hyphens.
+//
+// Note: github-slugger also de-duplicates repeated slugs by appending -1, -2,
+// etc. This implementation does not replicate that counter because duplicate tag
+// names are uncommon in valid OpenAPI specs and the feature is best-effort.
+// If a spec contains duplicate tags the generated anchor for the second
+// occurrence will not match Scalar's de-duplicated ID.
 func githubSlug(s string) string {
 	s = strings.ToLower(s)
 

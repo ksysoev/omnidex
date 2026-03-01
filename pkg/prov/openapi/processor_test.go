@@ -111,7 +111,7 @@ func TestProcessor_RenderHTML(t *testing.T) {
 	t.Run("semantically invalid spec is accepted", func(t *testing.T) {
 		p := New()
 		// Path has {petId} parameter but operation doesn't define it — previously
-		// failed semantic validation, but now passes because we rely on Swagger UI
+		// failed semantic validation, but now passes because we rely on Scalar API Reference
 		// to surface validation warnings to the user.
 		specWithMissingParam := []byte(`openapi: "3.0.3"
 info:
@@ -347,6 +347,39 @@ paths: {}
 		p := New()
 		headings := p.ExtractHeadings([]byte("not a spec"))
 		assert.Nil(t, headings)
+	})
+
+	t.Run("empty-name tags are skipped to match ToPlainText alignment", func(t *testing.T) {
+		p := New()
+		spec := []byte(`openapi: "3.0.3"
+info:
+  title: Mixed Tags API
+  version: "1.0.0"
+tags:
+  - name: ""
+  - name: visible
+paths:
+  /items:
+    get:
+      summary: List items
+      tags:
+        - visible
+      responses:
+        "200":
+          description: OK
+`)
+		headings := p.ExtractHeadings(spec)
+		plainText := p.ToPlainText(spec)
+
+		// Empty-name tag must not appear in headings.
+		require.Len(t, headings, 2)
+		assert.Equal(t, "visible", headings[0].Text)
+		assert.Equal(t, "tag/visible", headings[0].ID)
+
+		// Empty-name tag must not produce a line in plain text,
+		// so both functions iterate the same entries.
+		assert.NotContains(t, plainText, "\n\n")
+		assert.Contains(t, plainText, "visible")
 	})
 }
 
