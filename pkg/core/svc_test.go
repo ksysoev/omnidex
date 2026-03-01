@@ -823,7 +823,7 @@ func TestIngestDocuments_UnknownContentTypeNormalizesToMarkdown(t *testing.T) {
 
 func TestSearchDocs(t *testing.T) {
 	tests := []struct {
-		setupMocks  func(*MocksearchEngine)
+		setupMocks  func(*MockdocStore, *MocksearchEngine, *MockContentProcessor)
 		wantResults *SearchResults
 		name        string
 		query       string
@@ -831,10 +831,46 @@ func TestSearchDocs(t *testing.T) {
 		opts        SearchOpts
 	}{
 		{
-			name:  "success",
-			query: "hello world",
+			name:  "title-only match skips anchor resolution",
+			query: "hello",
 			opts:  SearchOpts{Limit: 10, Offset: 0},
-			setupMocks: func(search *MocksearchEngine) {
+			setupMocks: func(_ *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
+				results := &SearchResults{
+					Hits: []SearchResult{
+						{
+							ID:             "owner/repo/docs/hello.md",
+							Repo:           "owner/repo",
+							Path:           "docs/hello.md",
+							Title:          "Hello",
+							TitleFragments: []string{"<mark>Hello</mark>"},
+							Score:          2.0,
+						},
+					},
+					Total:    1,
+					Duration: 5 * time.Millisecond,
+				}
+				search.EXPECT().Search(mock.Anything, "hello", SearchOpts{Limit: 10, Offset: 0}).Return(results, nil)
+			},
+			wantResults: &SearchResults{
+				Hits: []SearchResult{
+					{
+						ID:             "owner/repo/docs/hello.md",
+						Repo:           "owner/repo",
+						Path:           "docs/hello.md",
+						Title:          "Hello",
+						TitleFragments: []string{"<mark>Hello</mark>"},
+						Score:          2.0,
+					},
+				},
+				Total:    1,
+				Duration: 5 * time.Millisecond,
+			},
+		},
+		{
+			name:  "content match resolves anchor",
+			query: "world",
+			opts:  SearchOpts{Limit: 10, Offset: 0},
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, renderer *MockContentProcessor) {
 				results := &SearchResults{
 					Hits: []SearchResult{
 						{
@@ -842,14 +878,28 @@ func TestSearchDocs(t *testing.T) {
 							Repo:             "owner/repo",
 							Path:             "docs/hello.md",
 							Title:            "Hello",
-							ContentFragments: []string{"<b>hello</b> <b>world</b>"},
+							ContentFragments: []string{"<mark>world</mark> content"},
 							Score:            1.5,
 						},
 					},
 					Total:    1,
 					Duration: 5 * time.Millisecond,
 				}
-				search.EXPECT().Search(mock.Anything, "hello world", SearchOpts{Limit: 10, Offset: 0}).Return(results, nil)
+				search.EXPECT().Search(mock.Anything, "world", SearchOpts{Limit: 10, Offset: 0}).Return(results, nil)
+
+				doc := Document{
+					ID:      "owner/repo/docs/hello.md",
+					Repo:    "owner/repo",
+					Path:    "docs/hello.md",
+					Title:   "Hello",
+					Content: "# Hello\n\nIntro text\n\n## Details\n\nworld content here",
+				}
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/hello.md").Return(doc, nil)
+				renderer.EXPECT().ExtractHeadings([]byte(doc.Content)).Return([]Heading{
+					{ID: "hello", Text: "Hello", Level: 1},
+					{ID: "details", Text: "Details", Level: 2},
+				})
+				renderer.EXPECT().ToPlainText([]byte(doc.Content)).Return("Hello\nIntro text\nDetails\nworld content here")
 			},
 			wantResults: &SearchResults{
 				Hits: []SearchResult{
@@ -858,7 +908,45 @@ func TestSearchDocs(t *testing.T) {
 						Repo:             "owner/repo",
 						Path:             "docs/hello.md",
 						Title:            "Hello",
-						ContentFragments: []string{"<b>hello</b> <b>world</b>"},
+						Anchor:           "details",
+						ContentFragments: []string{"<mark>world</mark> content"},
+						Score:            1.5,
+					},
+				},
+				Total:    1,
+				Duration: 5 * time.Millisecond,
+			},
+		},
+		{
+			name:  "anchor resolution skipped when store.Get fails",
+			query: "hello world",
+			opts:  SearchOpts{Limit: 10},
+			setupMocks: func(store *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
+				results := &SearchResults{
+					Hits: []SearchResult{
+						{
+							ID:               "owner/repo/docs/hello.md",
+							Repo:             "owner/repo",
+							Path:             "docs/hello.md",
+							Title:            "Hello",
+							ContentFragments: []string{"<mark>hello</mark> world"},
+							Score:            1.5,
+						},
+					},
+					Total:    1,
+					Duration: 5 * time.Millisecond,
+				}
+				search.EXPECT().Search(mock.Anything, "hello world", SearchOpts{Limit: 10}).Return(results, nil)
+				store.EXPECT().Get(mock.Anything, "owner/repo", "docs/hello.md").Return(Document{}, errors.New("not found"))
+			},
+			wantResults: &SearchResults{
+				Hits: []SearchResult{
+					{
+						ID:               "owner/repo/docs/hello.md",
+						Repo:             "owner/repo",
+						Path:             "docs/hello.md",
+						Title:            "Hello",
+						ContentFragments: []string{"<mark>hello</mark> world"},
 						Score:            1.5,
 					},
 				},
@@ -870,7 +958,7 @@ func TestSearchDocs(t *testing.T) {
 			name:  "error propagates",
 			query: "broken query",
 			opts:  SearchOpts{Limit: 10},
-			setupMocks: func(search *MocksearchEngine) {
+			setupMocks: func(_ *MockdocStore, search *MocksearchEngine, _ *MockContentProcessor) {
 				search.EXPECT().Search(mock.Anything, "broken query", SearchOpts{Limit: 10}).Return(nil, errors.New("search engine down"))
 			},
 			wantErr: "search engine down",
@@ -879,8 +967,8 @@ func TestSearchDocs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, _, search, _ := newTestService(t)
-			tt.setupMocks(search)
+			svc, store, search, renderer := newTestService(t)
+			tt.setupMocks(store, search, renderer)
 
 			results, err := svc.SearchDocs(t.Context(), tt.query, tt.opts)
 

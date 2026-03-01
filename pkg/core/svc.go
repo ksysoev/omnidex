@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -35,6 +36,10 @@ type ContentProcessor interface {
 	ExtractTitle(src []byte) string
 	// ToPlainText converts content to plain text for search indexing.
 	ToPlainText(src []byte) string
+	// ExtractHeadings returns the H1-H3 headings from the content with their
+	// anchor IDs, used to resolve search result deep-links. Returns nil when
+	// the content type does not support heading-based navigation.
+	ExtractHeadings(src []byte) []Heading
 }
 
 // Service encapsulates core business logic and dependencies.
@@ -226,11 +231,17 @@ func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document,
 }
 
 // SearchDocs performs a full-text search across all indexed documents.
+// After retrieving results from the search engine it attempts to resolve a
+// heading anchor for each hit so that the result link can scroll directly to
+// the matching section. Anchor resolution is best-effort; failures are logged
+// and do not prevent results from being returned.
 func (s *Service) SearchDocs(ctx context.Context, query string, opts SearchOpts) (*SearchResults, error) {
 	results, err := s.search.Search(ctx, query, opts)
 	if err != nil {
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
+
+	s.resolveAnchors(ctx, results)
 
 	return results, nil
 }
@@ -356,4 +367,151 @@ func (s *Service) reindexForCompensation(ctx context.Context, repo, path string,
 		"path", path,
 		"deleteErr", deleteErr,
 	)
+}
+
+// markTagRE matches HTML <mark> and </mark> tags produced by Bleve highlighting
+// so they can be stripped before comparing fragments against plain text.
+var markTagRE = regexp.MustCompile(`</?mark>`)
+
+// stripMarkTags removes <mark> and </mark> tags from a Bleve highlight fragment,
+// returning the plain text that was actually indexed.
+func stripMarkTags(fragment string) string {
+	return markTagRE.ReplaceAllString(fragment, "")
+}
+
+// resolveAnchors enriches each SearchResult with a heading Anchor so that
+// result links can deep-link directly to the matching section of a document.
+// It works by:
+//  1. Fetching the source document from the store.
+//  2. Extracting headings (anchor IDs + text) via the content processor.
+//  3. Converting the document to the same plain text that was indexed.
+//  4. Stripping <mark> tags from the first content fragment to get raw text.
+//  5. Finding that text in the plain text and determining which heading section
+//     it falls under.
+//
+// Resolution is best-effort: failures are logged and do not affect other hits.
+// Results with no content fragments (title-only matches) are skipped.
+func (s *Service) resolveAnchors(ctx context.Context, results *SearchResults) {
+	if results == nil {
+		return
+	}
+
+	for i := range results.Hits {
+		hit := &results.Hits[i]
+
+		if len(hit.ContentFragments) == 0 {
+			// Title-only match -- no content position to map; link to page top.
+			continue
+		}
+
+		anchor, err := s.resolveAnchor(ctx, hit)
+		if err != nil {
+			slog.DebugContext(ctx, "anchor resolution skipped",
+				"docID", hit.ID,
+				"err", err,
+			)
+
+			continue
+		}
+
+		hit.Anchor = anchor
+	}
+}
+
+// resolveAnchor resolves the heading anchor for a single SearchResult.
+// It returns the heading ID of the section that contains the first content
+// fragment, or an empty string when the match falls before the first heading.
+func (s *Service) resolveAnchor(ctx context.Context, hit *SearchResult) (string, error) {
+	doc, err := s.store.Get(ctx, hit.Repo, hit.Path)
+	if err != nil {
+		return "", fmt.Errorf("get document: %w", err)
+	}
+
+	processor := s.getProcessor(doc.ContentType)
+
+	headings := processor.ExtractHeadings([]byte(doc.Content))
+	if len(headings) == 0 {
+		// Content type does not support heading navigation (e.g. OpenAPI).
+		return "", nil
+	}
+
+	plainText := processor.ToPlainText([]byte(doc.Content))
+
+	// Strip highlight markers from the first fragment to get comparable plain text.
+	fragment := stripMarkTags(hit.ContentFragments[0])
+	fragment = strings.TrimSpace(fragment)
+
+	if fragment == "" {
+		return "", nil
+	}
+
+	return findAnchorForFragment(plainText, headings, fragment), nil
+}
+
+// findAnchorForFragment returns the ID of the heading whose section contains
+// the given text fragment. It works by locating each heading's text in the
+// plain text document to establish section boundaries, then checking which
+// section the fragment falls into.
+//
+// Returns an empty string when the fragment is found before the first heading
+// (i.e. in the document preamble) or when it is not found at all.
+func findAnchorForFragment(plainText string, headings []Heading, fragment string) string {
+	// Locate the fragment in the plain text.
+	fragIdx := strings.Index(plainText, fragment)
+	if fragIdx < 0 {
+		// Try a case-insensitive fallback for robustness.
+		lowerPlain := strings.ToLower(plainText)
+		lowerFrag := strings.ToLower(fragment)
+		fragIdx = strings.Index(lowerPlain, lowerFrag)
+	}
+
+	if fragIdx < 0 {
+		return ""
+	}
+
+	// Build a slice of (offset, headingID) pairs by finding each heading's
+	// text in the plain text. We iterate in document order and search only in
+	// the portion of the text that follows the previous heading to handle
+	// duplicate heading texts correctly.
+	type sectionBoundary struct {
+		id     string
+		offset int
+	}
+
+	boundaries := make([]sectionBoundary, 0, len(headings))
+	searchFrom := 0
+
+	for _, h := range headings {
+		if h.Text == "" || h.ID == "" {
+			continue
+		}
+
+		idx := strings.Index(plainText[searchFrom:], h.Text)
+		if idx < 0 {
+			// Heading not found in plain text (can happen when heading text
+			// contains characters stripped during plain-text conversion).
+			continue
+		}
+
+		abs := searchFrom + idx
+		boundaries = append(boundaries, sectionBoundary{offset: abs, id: h.ID})
+		searchFrom = abs + len(h.Text)
+	}
+
+	if len(boundaries) == 0 {
+		return ""
+	}
+
+	// Find the last section boundary that starts at or before the fragment.
+	anchor := ""
+
+	for _, b := range boundaries {
+		if b.offset > fragIdx {
+			break
+		}
+
+		anchor = b.id
+	}
+
+	return anchor
 }

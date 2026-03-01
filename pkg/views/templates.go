@@ -261,7 +261,7 @@ const searchResultsBody = `{{if .Results}}
     </style>
     <div class="space-y-4">
         {{range .Results.Hits}}
-        <a href="/docs/{{.Repo}}/{{.Path}}" hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
+        <a href="/docs/{{.Repo}}/{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}" hx-get="/docs/{{.Repo}}/{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}" hx-target="#main-content" hx-push-url="true"
            class="search-result block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
             <h3 class="text-lg font-semibold text-gray-900 mb-1">
                 {{- if .TitleFragments -}}

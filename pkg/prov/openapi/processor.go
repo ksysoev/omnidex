@@ -122,6 +122,12 @@ func (p *Processor) ToPlainText(src []byte) string {
 	return strings.TrimSpace(buf.String())
 }
 
+// ExtractHeadings returns nil for OpenAPI specs because Swagger UI provides
+// its own client-side navigation and anchor generation.
+func (p *Processor) ExtractHeadings(_ []byte) []core.Heading {
+	return nil
+}
+
 // parseSpec parses an OpenAPI spec from raw bytes (YAML or JSON).
 // It uses a lenient loader that does not resolve external references.
 // Semantic validation is intentionally skipped so that Swagger UI can render

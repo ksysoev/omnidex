@@ -19,6 +19,54 @@ func (_m *MockContentProcessor) EXPECT() *MockContentProcessor_Expecter {
 	return &MockContentProcessor_Expecter{mock: &_m.Mock}
 }
 
+// ExtractHeadings provides a mock function with given fields: src
+func (_m *MockContentProcessor) ExtractHeadings(src []byte) []Heading {
+	ret := _m.Called(src)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ExtractHeadings")
+	}
+
+	var r0 []Heading
+	if rf, ok := ret.Get(0).(func([]byte) []Heading); ok {
+		r0 = rf(src)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]Heading)
+		}
+	}
+
+	return r0
+}
+
+// MockContentProcessor_ExtractHeadings_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ExtractHeadings'
+type MockContentProcessor_ExtractHeadings_Call struct {
+	*mock.Call
+}
+
+// ExtractHeadings is a helper method to define mock.On call
+//   - src []byte
+func (_e *MockContentProcessor_Expecter) ExtractHeadings(src interface{}) *MockContentProcessor_ExtractHeadings_Call {
+	return &MockContentProcessor_ExtractHeadings_Call{Call: _e.mock.On("ExtractHeadings", src)}
+}
+
+func (_c *MockContentProcessor_ExtractHeadings_Call) Run(run func(src []byte)) *MockContentProcessor_ExtractHeadings_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockContentProcessor_ExtractHeadings_Call) Return(_a0 []Heading) *MockContentProcessor_ExtractHeadings_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockContentProcessor_ExtractHeadings_Call) RunAndReturn(run func([]byte) []Heading) *MockContentProcessor_ExtractHeadings_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ExtractTitle provides a mock function with given fields: src
 func (_m *MockContentProcessor) ExtractTitle(src []byte) string {
 	ret := _m.Called(src)
