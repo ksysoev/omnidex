@@ -765,3 +765,69 @@ func TestBleveEngine_ListByRepoAfterRemove(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, ids)
 }
+
+func TestExtractFragments(t *testing.T) {
+	tests := []struct {
+		name             string
+		input            map[string][]string
+		wantTitleFrags   []string
+		wantContentFrags []string
+	}{
+		{
+			name:             "empty map returns nil slices",
+			input:            map[string][]string{},
+			wantTitleFrags:   nil,
+			wantContentFrags: nil,
+		},
+		{
+			name: "title field goes to TitleFragments",
+			input: map[string][]string{
+				"title": {"Getting <mark>started</mark>"},
+			},
+			wantTitleFrags:   []string{"Getting <mark>started</mark>"},
+			wantContentFrags: nil,
+		},
+		{
+			name: "content field goes to ContentFragments",
+			input: map[string][]string{
+				"content": {"some <mark>matched</mark> text"},
+			},
+			wantTitleFrags:   nil,
+			wantContentFrags: []string{"some <mark>matched</mark> text"},
+		},
+		{
+			name: "unknown field goes to ContentFragments",
+			input: map[string][]string{
+				"tags": {"go", "search"},
+			},
+			wantTitleFrags:   nil,
+			wantContentFrags: []string{"go", "search"},
+		},
+		{
+			name: "title and content fields are split correctly",
+			input: map[string][]string{
+				"title":   {"<mark>Go</mark> Tutorial"},
+				"content": {"learn <mark>Go</mark> fast"},
+			},
+			wantTitleFrags:   []string{"<mark>Go</mark> Tutorial"},
+			wantContentFrags: []string{"learn <mark>Go</mark> fast"},
+		},
+		{
+			name: "unknown field does not contaminate TitleFragments",
+			input: map[string][]string{
+				"title":       {"<mark>title</mark> frag"},
+				"description": {"extra frag"},
+			},
+			wantTitleFrags:   []string{"<mark>title</mark> frag"},
+			wantContentFrags: []string{"extra frag"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotTitle, gotContent := extractFragments(tt.input)
+			assert.Equal(t, tt.wantTitleFrags, gotTitle)
+			assert.Equal(t, tt.wantContentFrags, gotContent)
+		})
+	}
+}

@@ -342,6 +342,80 @@ func TestRenderSearch_NoResults(t *testing.T) {
 	assert.Contains(t, output, "nonexistent")
 }
 
+func TestSafeFragment(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string
+		absent   []string
+	}{
+		{
+			name:     "preserves mark tag",
+			input:    "foo <mark>bar</mark> baz",
+			contains: []string{"<mark>bar</mark>", "foo", "baz"},
+		},
+		{
+			name:     "strips script tag",
+			input:    "text <script>alert('xss')</script> more",
+			contains: []string{"text", "more"},
+			absent:   []string{"<script>", "alert"},
+		},
+		{
+			name:     "strips attributes from mark tag",
+			input:    `<mark onclick="evil()">term</mark>`,
+			contains: []string{"<mark>term</mark>"},
+			absent:   []string{"onclick"},
+		},
+		{
+			name:     "strips other tags but keeps text",
+			input:    "<b>bold</b> and <em>italic</em>",
+			contains: []string{"bold", "italic"},
+			absent:   []string{"<b>", "<em>"},
+		},
+		{
+			name:     "plain text passes through unchanged",
+			input:    "plain text fragment",
+			contains: []string{"plain text fragment"},
+		},
+	}
+
+	r := New()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Render a search result whose ContentFragment contains the test input.
+			results := &core.SearchResults{
+				Hits: []core.SearchResult{
+					{
+						ID:               "org/repo/doc.md",
+						Repo:             "org/repo",
+						Path:             "doc.md",
+						Title:            "Doc",
+						ContentFragments: []string{tt.input},
+						Score:            1.0,
+					},
+				},
+				Total: 1,
+			}
+
+			var buf bytes.Buffer
+
+			err := r.RenderSearch(&buf, "q", results, true)
+			require.NoError(t, err)
+
+			output := buf.String()
+
+			for _, want := range tt.contains {
+				assert.Contains(t, output, want)
+			}
+
+			for _, unwanted := range tt.absent {
+				assert.NotContains(t, output, unwanted)
+			}
+		})
+	}
+}
+
 func TestRenderNotFound(t *testing.T) {
 	r := New()
 

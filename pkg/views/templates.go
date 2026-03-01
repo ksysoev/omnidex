@@ -207,7 +207,7 @@ const searchResultsBody = `{{if .Results}}
     <p class="text-sm text-gray-500 mb-4">{{.Results.Total}} results found</p>
     {{if .Results.Hits}}
     <style>
-    .search-result mark { background-color: #fef9c3; color: #713f12; border-radius: 2px; padding: 0 2px; }
+    .search-result mark { background-color: #dbeafe; color: #1e3a8a; border-radius: 2px; padding: 0 2px; }
     </style>
     <div class="space-y-4">
         {{range .Results.Hits}}
@@ -215,7 +215,10 @@ const searchResultsBody = `{{if .Results}}
            class="search-result block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
             <h3 class="text-lg font-semibold text-gray-900 mb-1">
                 {{- if .TitleFragments -}}
-                    {{range .TitleFragments}}{{safeFragment .}}{{end}}
+                    {{- range $i, $f := .TitleFragments -}}
+                        {{- if $i}}<span class="text-gray-300 mx-1">&hellip;</span>{{end -}}
+                        {{safeFragment $f}}
+                    {{- end -}}
                 {{- else -}}
                     {{.Title}}
                 {{- end -}}
@@ -228,7 +231,7 @@ const searchResultsBody = `{{if .Results}}
                     {{safeFragment $f}}
                 {{- end -}}
             </p>
-            {{else if not .TitleFragments}}
+            {{else if .TitleFragments}}
             <p class="text-xs text-gray-400 italic">Matched in title</p>
             {{end}}
         </a>
