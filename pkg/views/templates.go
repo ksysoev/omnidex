@@ -206,11 +206,11 @@ const layoutHeader = `<!DOCTYPE html>
                 if (!svg) return;
                 var vw = viewport.clientWidth  - 64;
                 var vh = viewport.clientHeight - 64;
-                var sw = svg.getAttribute('width')  ? parseFloat(svg.getAttribute('width'))  : svg.viewBox.baseVal.width;
-                var sh = svg.getAttribute('height') ? parseFloat(svg.getAttribute('height')) : svg.viewBox.baseVal.height;
-                if (!sw || !sh) { sw = svg.getBoundingClientRect().width; sh = svg.getBoundingClientRect().height; }
+                // Read explicit px dimensions set by openMermaidModal.
+                var sw = parseFloat(svg.getAttribute('width'))  || 0;
+                var sh = parseFloat(svg.getAttribute('height')) || 0;
                 if (!sw || !sh) { sw = vw; sh = vh; }
-                var fitScale = Math.min(vw / sw, vh / sh, 1);
+                var fitScale = Math.min(vw / sw, vh / sh);
                 scale = fitScale;
                 tx = (viewport.clientWidth  - sw * scale) / 2;
                 ty = (viewport.clientHeight - sh * scale) / 2;
@@ -300,8 +300,30 @@ const layoutHeader = `<!DOCTYPE html>
 
             window.openMermaidModal = function(svgEl) {
                 if (!getModal()) return;
+
+                // Resolve intrinsic pixel dimensions before cloning.
+                // Mermaid sets width="100%" on the SVG; parseFloat("100%") = 100
+                // which is wrong. viewBox always carries the true pixel dimensions.
+                var intrinsicW = 0, intrinsicH = 0;
+                var vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+                if (vb && vb.width && vb.height) {
+                    intrinsicW = vb.width;
+                    intrinsicH = vb.height;
+                }
+                if (!intrinsicW || !intrinsicH) {
+                    var br = svgEl.getBoundingClientRect();
+                    intrinsicW = br.width;
+                    intrinsicH = br.height;
+                }
+
                 var clone = svgEl.cloneNode(true);
                 clone.removeAttribute('style');
+                // Stamp explicit px dimensions so the clone has a stable layout
+                // size that matches the values fitToScreen and applyZoom rely on.
+                if (intrinsicW && intrinsicH) {
+                    clone.setAttribute('width',  intrinsicW);
+                    clone.setAttribute('height', intrinsicH);
+                }
                 canvas.innerHTML = '';
                 canvas.appendChild(clone);
                 scale = 1; tx = 0; ty = 0;
