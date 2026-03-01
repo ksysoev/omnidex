@@ -838,12 +838,12 @@ func TestSearchDocs(t *testing.T) {
 				results := &SearchResults{
 					Hits: []SearchResult{
 						{
-							ID:        "owner/repo/docs/hello.md",
-							Repo:      "owner/repo",
-							Path:      "docs/hello.md",
-							Title:     "Hello",
-							Fragments: []string{"<b>hello</b> <b>world</b>"},
-							Score:     1.5,
+							ID:               "owner/repo/docs/hello.md",
+							Repo:             "owner/repo",
+							Path:             "docs/hello.md",
+							Title:            "Hello",
+							ContentFragments: []string{"<b>hello</b> <b>world</b>"},
+							Score:            1.5,
 						},
 					},
 					Total:    1,
@@ -854,12 +854,12 @@ func TestSearchDocs(t *testing.T) {
 			wantResults: &SearchResults{
 				Hits: []SearchResult{
 					{
-						ID:        "owner/repo/docs/hello.md",
-						Repo:      "owner/repo",
-						Path:      "docs/hello.md",
-						Title:     "Hello",
-						Fragments: []string{"<b>hello</b> <b>world</b>"},
-						Score:     1.5,
+						ID:               "owner/repo/docs/hello.md",
+						Repo:             "owner/repo",
+						Path:             "docs/hello.md",
+						Title:            "Hello",
+						ContentFragments: []string{"<b>hello</b> <b>world</b>"},
+						Score:            1.5,
 					},
 				},
 				Total:    1,

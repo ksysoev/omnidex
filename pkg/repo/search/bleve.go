@@ -87,10 +87,12 @@ func (e *BleveEngine) Search(_ context.Context, query string, opts core.SearchOp
 	hits := make([]core.SearchResult, 0, len(result.Hits))
 
 	for _, hit := range result.Hits {
+		titleFrags, contentFrags := extractFragments(hit.Fragments)
 		sr := core.SearchResult{
-			ID:        hit.ID,
-			Score:     hit.Score,
-			Fragments: extractFragments(hit.Fragments),
+			ID:               hit.ID,
+			Score:            hit.Score,
+			TitleFragments:   titleFrags,
+			ContentFragments: contentFrags,
 		}
 
 		if repo, ok := hit.Fields["repo"].(string); ok {
@@ -365,12 +367,16 @@ func buildIndexMapping() mapping.IndexMapping {
 	return indexMapping
 }
 
-func extractFragments(fragments bleveSearch.FieldFragmentMap) []string {
-	result := make([]string, 0, len(fragments))
-
-	for _, frags := range fragments {
-		result = append(result, frags...)
+// extractFragments splits Bleve highlight fragments into title and content buckets.
+// Bleve keys fragments by field name ("title", "content"); all other fields fall into content.
+func extractFragments(fragments bleveSearch.FieldFragmentMap) (titleFrags, contentFrags []string) {
+	for field, frags := range fragments {
+		if field == "title" {
+			titleFrags = append(titleFrags, frags...)
+		} else {
+			contentFrags = append(contentFrags, frags...)
+		}
 	}
 
-	return result
+	return titleFrags, contentFrags
 }

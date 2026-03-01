@@ -206,14 +206,33 @@ const searchContentBody = `
 const searchResultsBody = `{{if .Results}}
     <p class="text-sm text-gray-500 mb-4">{{.Results.Total}} results found</p>
     {{if .Results.Hits}}
+    <style>
+    .search-result mark { background-color: #dbeafe; color: #1e3a8a; border-radius: 2px; padding: 0 2px; }
+    </style>
     <div class="space-y-4">
         {{range .Results.Hits}}
         <a href="/docs/{{.Repo}}/{{.Path}}" hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
-           class="block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">{{.Title}}</h3>
-            <p class="text-sm text-gray-500 mb-2">{{.Repo}}/{{.Path}}</p>
-            {{range .Fragments}}
-            <p class="text-sm text-gray-600">{{.}}</p>
+           class="search-result block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
+            <h3 class="text-lg font-semibold text-gray-900 mb-1">
+                {{- if .TitleFragments -}}
+                    {{- range $i, $f := .TitleFragments -}}
+                        {{- if $i}}<span class="text-gray-300 mx-1">&hellip;</span>{{end -}}
+                        {{safeFragment $f}}
+                    {{- end -}}
+                {{- else -}}
+                    {{.Title}}
+                {{- end -}}
+            </h3>
+            <p class="text-xs text-gray-400 mb-2">{{.Repo}}/{{.Path}}</p>
+            {{if .ContentFragments}}
+            <p class="text-sm text-gray-600 leading-relaxed">
+                {{- range $i, $f := .ContentFragments -}}
+                    {{- if $i}}<span class="text-gray-300 mx-1">&hellip;</span>{{end -}}
+                    {{safeFragment $f}}
+                {{- end -}}
+            </p>
+            {{else if .TitleFragments}}
+            <p class="text-xs text-gray-400 italic">Matched in title</p>
             {{end}}
         </a>
         {{end}}

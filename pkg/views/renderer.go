@@ -6,8 +6,19 @@ import (
 	"html/template"
 	"io"
 
+	"github.com/microcosm-cc/bluemonday"
+
 	"github.com/ksysoev/omnidex/pkg/core"
 )
+
+// fragmentPolicy is a bluemonday policy that allows only <mark> tags in search fragments.
+// This lets Bleve's highlight markers render as real HTML while stripping any other markup.
+var fragmentPolicy = func() *bluemonday.Policy {
+	p := bluemonday.NewPolicy()
+	p.AllowElements("mark")
+
+	return p
+}()
 
 // Renderer renders HTML views for the documentation portal.
 type Renderer struct {
@@ -35,6 +46,11 @@ func New() *Renderer {
 		},
 		"safeJS": func(s string) template.JS {
 			return template.JS(s) //nolint:gosec // trusted JSON from OpenAPI processor
+		},
+		// safeFragment sanitizes a Bleve highlight fragment, allowing only <mark> tags so
+		// matched terms are highlighted in the browser without XSS risk.
+		"safeFragment": func(s string) template.HTML {
+			return template.HTML(fragmentPolicy.Sanitize(s)) //nolint:gosec // sanitized by bluemonday
 		},
 		"tocIndent": func(level int) string {
 			switch level {

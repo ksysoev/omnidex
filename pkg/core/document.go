@@ -43,12 +43,13 @@ type RepoInfo struct {
 
 // SearchResult represents a single search result with highlighted snippets.
 type SearchResult struct {
-	ID        string
-	Repo      string
-	Path      string
-	Title     string
-	Fragments []string
-	Score     float64
+	ID               string
+	Repo             string
+	Path             string
+	Title            string
+	TitleFragments   []string // highlighted fragments from the title field
+	ContentFragments []string // highlighted fragments from the content field
+	Score            float64
 }
 
 // SearchResults holds the response from a search query.
