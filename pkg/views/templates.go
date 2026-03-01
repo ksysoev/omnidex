@@ -172,7 +172,7 @@ const layoutHeader = `<!DOCTYPE html>
             var modal, viewport, canvas, zoomLabel;
             var scale = 1, tx = 0, ty = 0;
             var minScale = 0.05, maxScale = 20;
-            var isPanning = false, panStartX = 0, panStartY = 0, panStartTx = 0, panStartTy = 0;
+            var isPanning = false, hasDragged = false, panStartX = 0, panStartY = 0, panStartTx = 0, panStartTy = 0;
             var pinchStartDist = 0, pinchStartScale = 1, pinchStartTx = 0, pinchStartTy = 0;
             var modalOpen = false;
             var _boundMouseMove, _boundMouseUp, _boundWheel, _boundKeyDown, _boundTouchMove, _boundTouchEnd;
@@ -199,6 +199,7 @@ const layoutHeader = `<!DOCTYPE html>
                     if (zoomReset) zoomReset.addEventListener('click', fitToScreen);
                     if (modal) {
                         modal.addEventListener('click', function(e) {
+                            if (hasDragged) { hasDragged = false; return; }
                             if (e.target === modal || e.target === viewport) { closeMermaidModal(); }
                         });
                     }
@@ -232,7 +233,7 @@ const layoutHeader = `<!DOCTYPE html>
                 var sh = parseFloat(svg.getAttribute('height')) || 0;
                 if (!sw || !sh) { sw = vw; sh = vh; }
                 var fitScale = Math.min(vw / sw, vh / sh);
-                scale = fitScale;
+                scale = Math.min(maxScale, Math.max(minScale, fitScale));
                 tx = (viewport.clientWidth  - sw * scale) / 2;
                 ty = (viewport.clientHeight - sh * scale) / 2;
                 applyTransform();
@@ -241,6 +242,7 @@ const layoutHeader = `<!DOCTYPE html>
             function onMouseDown(e) {
                 if (e.button !== 0) return;
                 isPanning = true;
+                hasDragged = false;
                 panStartX = e.clientX; panStartY = e.clientY;
                 panStartTx = tx; panStartTy = ty;
                 viewport.classList.add('is-panning');
@@ -248,8 +250,11 @@ const layoutHeader = `<!DOCTYPE html>
             }
             function onMouseMove(e) {
                 if (!isPanning) return;
-                tx = panStartTx + (e.clientX - panStartX);
-                ty = panStartTy + (e.clientY - panStartY);
+                var dx = e.clientX - panStartX;
+                var dy = e.clientY - panStartY;
+                if (!hasDragged && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) { hasDragged = true; }
+                tx = panStartTx + dx;
+                ty = panStartTy + dy;
                 applyTransform();
             }
             function onMouseUp() {
