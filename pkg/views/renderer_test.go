@@ -39,6 +39,7 @@ func TestRenderHome_FullPage(t *testing.T) {
 	assert.Contains(t, output, "my-org/repo-beta")
 	assert.Contains(t, output, "5 documents")
 	assert.Contains(t, output, "12 documents")
+	assert.Contains(t, output, "initHeadingAnchors")
 }
 
 func TestRenderHome_Partial(t *testing.T) {
