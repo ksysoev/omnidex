@@ -106,3 +106,52 @@ func TestAssetPage_SVGContentType(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "image/svg+xml", rec.Header().Get("Content-Type"))
 }
+
+func TestAssetPage_SecurityHeaders(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	api := &API{
+		svc:    svc,
+		views:  views,
+		config: Config{APIKeys: []string{"test-key"}},
+	}
+
+	mux := api.newMux()
+
+	imgData := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "images/arch.png").Return(imgData, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/owner/repo/images/arch.png", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "sandbox", rec.Header().Get("Content-Security-Policy"))
+}
+
+func TestAssetPage_InvalidPath(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	api := &API{
+		svc:    svc,
+		views:  views,
+		config: Config{APIKeys: []string{"test-key"}},
+	}
+
+	mux := api.newMux()
+
+	// The service returns ErrInvalidPath (e.g. the store's traversal check fired).
+	// The handler must respond with 400, not 500, and must not log a server error.
+	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "traversal-attempt").Return(nil, docstore.ErrInvalidPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/owner/repo/traversal-attempt", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}

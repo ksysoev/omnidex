@@ -30,6 +30,11 @@ func (a *API) assetPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if errors.Is(err, docstore.ErrInvalidPath) {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
 		slog.ErrorContext(r.Context(), "Failed to get asset", "error", err, "repo", fullRepo, "path", path)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 
@@ -43,6 +48,8 @@ func (a *API) assetPage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox")
 
 	if _, err := w.Write(data); err != nil { //nolint:gosec // Binary asset data with explicit Content-Type; not user-controlled HTML
 		slog.ErrorContext(r.Context(), "Failed to write asset response", "error", err)

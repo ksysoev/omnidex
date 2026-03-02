@@ -135,6 +135,75 @@ func TestIngestDocuments_SyncDeletesStaleAssets(t *testing.T) {
 	assert.Equal(t, 1, resp.AssetsDeleted)
 }
 
+func TestIngestDocuments_SyncWithNoAssetsDoesNotDeleteStoredAssets(t *testing.T) {
+	// When a sync request has no assets (nil slice, e.g. from an older client),
+	// stale-asset cleanup must NOT run and existing stored assets must be preserved.
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md"},
+	}, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
+
+	// ListAssets must NOT be called when Assets is nil.
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+		// Assets intentionally omitted (nil) — simulates an older client.
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_UpsertAssetEmptyPath(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: []IngestAsset{
+			{Path: "", Content: "ZGF0YQ==", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "path must not be empty")
+}
+
+func TestIngestDocuments_UpsertAssetEmptyContent(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: []IngestAsset{
+			{Path: "images/arch.png", Content: "", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "content must not be empty")
+}
+
 func TestGetAsset_Success(t *testing.T) {
 	svc, store, _, _ := newTestService(t)
 
@@ -452,8 +521,7 @@ func TestIngestDocuments_SyncDeletesStaleDocuments(t *testing.T) {
 	// Mock ListByRepo for orphan cleanup — no orphans remain after deletion.
 	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/keep.md"}, nil)
 
-	// Mock ListAssets for stale asset cleanup — no assets stored.
-	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return(nil, nil)
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -490,8 +558,7 @@ func TestIngestDocuments_SyncNoStaleDocuments(t *testing.T) {
 	// No orphans in search index either.
 	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
 
-	// Mock ListAssets for stale asset cleanup — no assets stored.
-	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return(nil, nil)
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -631,8 +698,7 @@ func TestIngestDocuments_SyncCleansOrphanedSearchEntries(t *testing.T) {
 	// Expect the orphaned entry to be removed from the search index.
 	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(nil)
 
-	// Mock ListAssets for stale asset cleanup — no assets stored.
-	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return(nil, nil)
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
@@ -671,8 +737,7 @@ func TestIngestDocuments_SyncOrphanCleanupSkipsValidDocs(t *testing.T) {
 	// Only the orphan should be removed.
 	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(nil)
 
-	// Mock ListAssets for stale asset cleanup — no assets stored.
-	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return(nil, nil)
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
 
 	req := IngestRequest{
 		Repo:      "owner/repo",

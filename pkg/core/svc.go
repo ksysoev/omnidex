@@ -153,12 +153,18 @@ func (s *Service) IngestDocuments(ctx context.Context, req *IngestRequest) (*Ing
 
 		deleted += syncDeleted
 
-		syncAssetsDeleted, err := s.syncDeleteStaleAssets(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to sync stale assets: %w", err)
-		}
+		// Only sync-delete stale assets when the request explicitly includes an
+		// assets list. When Assets is nil (e.g. from an older client that doesn't
+		// know about the assets field), it is indistinguishable from "no assets"
+		// and blindly running cleanup would delete all stored assets for the repo.
+		if len(req.Assets) > 0 {
+			syncAssetsDeleted, err := s.syncDeleteStaleAssets(ctx, req)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sync stale assets: %w", err)
+			}
 
-		assetsDeleted += syncAssetsDeleted
+			assetsDeleted += syncAssetsDeleted
+		}
 	}
 
 	return &IngestResponse{
@@ -431,6 +437,14 @@ func (s *Service) reindexForCompensation(ctx context.Context, repo, path string,
 
 // upsertAsset decodes a base64-encoded asset and stores it on disk.
 func (s *Service) upsertAsset(ctx context.Context, repo string, asset IngestAsset) error {
+	if asset.Path == "" {
+		return fmt.Errorf("asset path must not be empty")
+	}
+
+	if asset.Content == "" {
+		return fmt.Errorf("asset content must not be empty for path %s", asset.Path)
+	}
+
 	data, err := base64.StdEncoding.DecodeString(asset.Content)
 	if err != nil {
 		return fmt.Errorf("failed to decode base64 asset content: %w", err)
