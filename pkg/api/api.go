@@ -32,8 +32,9 @@ type Config struct {
 
 // Service defines the interface for core business logic operations.
 type Service interface {
-	IngestDocuments(ctx context.Context, req core.IngestRequest) (*core.IngestResponse, error)
+	IngestDocuments(ctx context.Context, req *core.IngestRequest) (*core.IngestResponse, error)
 	GetDocument(ctx context.Context, repo, path string) (core.Document, []byte, []core.Heading, error)
+	GetAsset(ctx context.Context, repo, path string) ([]byte, error)
 	SearchDocs(ctx context.Context, query string, opts core.SearchOpts) (*core.SearchResults, error)
 	ListRepos(ctx context.Context) ([]core.RepoInfo, error)
 	ListDocuments(ctx context.Context, repo string) ([]core.DocumentMeta, error)

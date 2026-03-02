@@ -3,12 +3,20 @@ package core
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
+)
+
+const (
+	// actionUpsert is the ingest action for creating or updating a document/asset.
+	actionUpsert = "upsert"
+	// actionDelete is the ingest action for removing a document/asset.
+	actionDelete = "delete"
 )
 
 // docStore defines the interface for document persistence operations.
@@ -18,6 +26,10 @@ type docStore interface {
 	Delete(ctx context.Context, repo, path string) error
 	List(ctx context.Context, repo string) ([]DocumentMeta, error)
 	ListRepos(ctx context.Context) ([]RepoInfo, error)
+	SaveAsset(ctx context.Context, repo, path string, data []byte) error
+	GetAsset(ctx context.Context, repo, path string) ([]byte, error)
+	DeleteAsset(ctx context.Context, repo, path string) error
+	ListAssets(ctx context.Context, repo string) ([]string, error)
 }
 
 // searchEngine defines the interface for full-text search operations.
@@ -87,19 +99,20 @@ func (s *Service) getProcessor(ct ContentType) ContentProcessor {
 // IngestDocuments processes a batch of document upserts and deletes from a repository.
 // When req.Sync is true, after processing all documents the server treats the incoming
 // document set as the complete truth for the repo and removes any stored documents
-// whose paths are not present in the request.
-func (s *Service) IngestDocuments(ctx context.Context, req IngestRequest) (*IngestResponse, error) {
+// whose paths are not present in the request. Assets (images, etc.) bundled in the
+// request are stored alongside documents and participate in sync cleanup.
+func (s *Service) IngestDocuments(ctx context.Context, req *IngestRequest) (*IngestResponse, error) {
 	var indexed, deleted int
 
 	for _, ingestDoc := range req.Documents {
 		switch ingestDoc.Action {
-		case "upsert":
+		case actionUpsert:
 			if err := s.upsertDocument(ctx, req.Repo, req.CommitSHA, ingestDoc); err != nil {
 				return nil, fmt.Errorf("failed to upsert document %s: %w", ingestDoc.Path, err)
 			}
 
 			indexed++
-		case "delete":
+		case actionDelete:
 			if err := s.deleteDocument(ctx, req.Repo, ingestDoc.Path); err != nil {
 				return nil, fmt.Errorf("failed to delete document %s: %w", ingestDoc.Path, err)
 			}
@@ -110,6 +123,28 @@ func (s *Service) IngestDocuments(ctx context.Context, req IngestRequest) (*Inge
 		}
 	}
 
+	// Process assets (images, diagrams, etc.).
+	var assetsStored, assetsDeleted int
+
+	for _, asset := range req.Assets {
+		switch asset.Action {
+		case actionUpsert:
+			if err := s.upsertAsset(ctx, req.Repo, asset); err != nil {
+				return nil, fmt.Errorf("failed to upsert asset %s: %w", asset.Path, err)
+			}
+
+			assetsStored++
+		case actionDelete:
+			if err := s.store.DeleteAsset(ctx, req.Repo, asset.Path); err != nil {
+				return nil, fmt.Errorf("failed to delete asset %s: %w", asset.Path, err)
+			}
+
+			assetsDeleted++
+		default:
+			slog.WarnContext(ctx, "unknown asset action", "action", asset.Action, "path", asset.Path)
+		}
+	}
+
 	if req.Sync {
 		syncDeleted, err := s.syncDeleteStale(ctx, req)
 		if err != nil {
@@ -117,18 +152,27 @@ func (s *Service) IngestDocuments(ctx context.Context, req IngestRequest) (*Inge
 		}
 
 		deleted += syncDeleted
+
+		syncAssetsDeleted, err := s.syncDeleteStaleAssets(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sync stale assets: %w", err)
+		}
+
+		assetsDeleted += syncAssetsDeleted
 	}
 
 	return &IngestResponse{
-		Indexed: indexed,
-		Deleted: deleted,
+		Indexed:       indexed,
+		Deleted:       deleted,
+		AssetsStored:  assetsStored,
+		AssetsDeleted: assetsDeleted,
 	}, nil
 }
 
 // syncDeleteStale removes stored documents that are not present in the ingest request.
 // It also cleans up orphaned entries in the search index that may have been left behind
 // by previous partial failures. It returns the total number of documents removed.
-func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, error) {
+func (s *Service) syncDeleteStale(ctx context.Context, req *IngestRequest) (int, error) {
 	stored, err := s.store.List(ctx, req.Repo)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list stored documents for repo %s: %w", req.Repo, err)
@@ -139,7 +183,7 @@ func (s *Service) syncDeleteStale(ctx context.Context, req IngestRequest) (int, 
 	// processed and removed from the store before sync runs.
 	requestPaths := make(map[string]struct{}, len(req.Documents))
 	for _, doc := range req.Documents {
-		if doc.Action == "upsert" {
+		if doc.Action == actionUpsert {
 			requestPaths[doc.Path] = struct{}{}
 		}
 	}
@@ -215,6 +259,7 @@ func (s *Service) cleanOrphanedSearchEntries(ctx context.Context, repo string, v
 
 // GetDocument retrieves a document and renders its content to HTML using the
 // appropriate content processor. It also extracts headings for table of contents navigation.
+// Relative image URLs in the rendered HTML are rewritten to point to the asset serving route.
 func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document, []byte, []Heading, error) {
 	doc, err := s.store.Get(ctx, repo, path)
 	if err != nil {
@@ -228,7 +273,21 @@ func (s *Service) GetDocument(ctx context.Context, repo, path string) (Document,
 		return Document{}, nil, nil, fmt.Errorf("failed to render document: %w", err)
 	}
 
+	// Rewrite relative image URLs so the browser can resolve them through
+	// the /assets/{owner}/{repo}/{path} route.
+	html = RewriteImageURLs(html, repo, path)
+
 	return doc, html, headings, nil
+}
+
+// GetAsset retrieves a binary asset by its repository and path.
+func (s *Service) GetAsset(ctx context.Context, repo, path string) ([]byte, error) {
+	data, err := s.store.GetAsset(ctx, repo, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get asset: %w", err)
+	}
+
+	return data, nil
 }
 
 // SearchDocs performs a full-text search across all indexed documents.
@@ -368,6 +427,58 @@ func (s *Service) reindexForCompensation(ctx context.Context, repo, path string,
 		"path", path,
 		"deleteErr", deleteErr,
 	)
+}
+
+// upsertAsset decodes a base64-encoded asset and stores it on disk.
+func (s *Service) upsertAsset(ctx context.Context, repo string, asset IngestAsset) error {
+	data, err := base64.StdEncoding.DecodeString(asset.Content)
+	if err != nil {
+		return fmt.Errorf("failed to decode base64 asset content: %w", err)
+	}
+
+	if err := s.store.SaveAsset(ctx, repo, asset.Path, data); err != nil {
+		return fmt.Errorf("failed to save asset: %w", err)
+	}
+
+	return nil
+}
+
+// syncDeleteStaleAssets removes stored assets that are not present in the ingest request.
+// It returns the number of assets removed.
+func (s *Service) syncDeleteStaleAssets(ctx context.Context, req *IngestRequest) (int, error) {
+	stored, err := s.store.ListAssets(ctx, req.Repo)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list stored assets for repo %s: %w", req.Repo, err)
+	}
+
+	requestPaths := make(map[string]struct{}, len(req.Assets))
+	for _, asset := range req.Assets {
+		if asset.Action == actionUpsert {
+			requestPaths[asset.Path] = struct{}{}
+		}
+	}
+
+	var deleted int
+
+	for _, path := range stored {
+		if _, exists := requestPaths[path]; exists {
+			continue
+		}
+
+		slog.DebugContext(ctx, "sync: removing stale asset", "repo", req.Repo, "path", path)
+
+		if err := s.store.DeleteAsset(ctx, req.Repo, path); err != nil {
+			return deleted, fmt.Errorf("failed to delete stale asset %s: %w", path, err)
+		}
+
+		deleted++
+	}
+
+	if deleted > 0 {
+		slog.InfoContext(ctx, "sync: stale asset cleanup complete", "repo", req.Repo, "deleted", deleted)
+	}
+
+	return deleted, nil
 }
 
 // markTagRE matches HTML <mark> and </mark> tags produced by Bleve highlighting

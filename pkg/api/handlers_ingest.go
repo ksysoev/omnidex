@@ -29,7 +29,7 @@ func (a *API) ingestDocs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := a.svc.IngestDocuments(r.Context(), req)
+	resp, err := a.svc.IngestDocuments(r.Context(), &req)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Failed to ingest documents", "error", err)
 		http.Error(w, "failed to process documents", http.StatusInternalServerError)

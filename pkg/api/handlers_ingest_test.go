@@ -29,7 +29,11 @@ func TestIngestDocs_Success(t *testing.T) {
 		},
 	}
 
-	svc.EXPECT().IngestDocuments(mock.Anything, ingestReq).Return(&core.IngestResponse{
+	svc.EXPECT().IngestDocuments(mock.Anything, mock.MatchedBy(func(r *core.IngestRequest) bool {
+		return r.Repo == ingestReq.Repo &&
+			r.CommitSHA == ingestReq.CommitSHA &&
+			len(r.Documents) == len(ingestReq.Documents)
+	})).Return(&core.IngestResponse{
 		Indexed: 1,
 		Deleted: 0,
 	}, nil)
@@ -140,7 +144,9 @@ func TestIngestDocs_ServiceError(t *testing.T) {
 		},
 	}
 
-	svc.EXPECT().IngestDocuments(mock.Anything, ingestReq).Return(nil, fmt.Errorf("storage failure"))
+	svc.EXPECT().IngestDocuments(mock.Anything, mock.MatchedBy(func(r *core.IngestRequest) bool {
+		return r.Repo == ingestReq.Repo
+	})).Return(nil, fmt.Errorf("storage failure"))
 
 	api := &API{svc: svc, views: views}
 

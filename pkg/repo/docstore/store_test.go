@@ -519,3 +519,144 @@ func TestStore_CleanEmptyDirsWithRemainingFiles(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "b.md", got.Title)
 }
+
+func TestStore_SaveAndGetAsset(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	data := []byte{0x89, 0x50, 0x4E, 0x47} // PNG magic bytes
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/arch.png", data)
+	require.NoError(t, err)
+
+	got, err := store.GetAsset(t.Context(), "owner/repo", "images/arch.png")
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
+}
+
+func TestStore_GetAssetNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	_, err = store.GetAsset(t.Context(), "owner/repo", "nonexistent.png")
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestStore_DeleteAsset(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	data := []byte("fake image data")
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "img.png", data)
+	require.NoError(t, err)
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", "img.png")
+	require.NoError(t, err)
+
+	// Should be gone now.
+	_, err = store.GetAsset(t.Context(), "owner/repo", "img.png")
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestStore_DeleteAssetNonexistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Deleting a non-existent asset should not error (idempotent).
+	err = store.DeleteAsset(t.Context(), "owner/repo", "nope.png")
+	assert.NoError(t, err)
+}
+
+func TestStore_ListAssets(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// No assets yet — should return nil.
+	paths, err := store.ListAssets(t.Context(), "owner/repo")
+	require.NoError(t, err)
+	assert.Nil(t, paths)
+
+	// Save some assets.
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/b.png", []byte("b"))
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/a.png", []byte("a"))
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "diagrams/arch.svg", []byte("svg"))
+	require.NoError(t, err)
+
+	paths, err = store.ListAssets(t.Context(), "owner/repo")
+	require.NoError(t, err)
+
+	// Should be sorted alphabetically.
+	assert.Equal(t, []string{
+		"diagrams/arch.svg",
+		"images/a.png",
+		"images/b.png",
+	}, paths)
+}
+
+func TestStore_DeleteAssetCleansEmptyDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "deep/nested/img.png", []byte("data"))
+	require.NoError(t, err)
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", "deep/nested/img.png")
+	require.NoError(t, err)
+
+	// The nested directories should be cleaned up.
+	_, err = os.Stat(filepath.Join(tmpDir, "owner", "repo", "assets", "deep"))
+	assert.True(t, os.IsNotExist(err), "expected deep directory to be cleaned up")
+}
+
+func TestStore_AssetPathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Use a path that escapes outside the basePath entirely.
+	traversalPath := "../../../../../../../../etc/passwd"
+
+	// Attempt to save with path traversal — should be rejected.
+	err = store.SaveAsset(t.Context(), "owner/repo", traversalPath, []byte("bad"))
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	// Attempt to get with path traversal.
+	_, err = store.GetAsset(t.Context(), "owner/repo", traversalPath)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	// Attempt to delete with path traversal.
+	err = store.DeleteAsset(t.Context(), "owner/repo", traversalPath)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+}
+
+func TestStore_SaveAssetOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "img.png", []byte("version1"))
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "img.png", []byte("version2"))
+	require.NoError(t, err)
+
+	got, err := store.GetAsset(t.Context(), "owner/repo", "img.png")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("version2"), got)
+}

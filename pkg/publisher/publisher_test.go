@@ -90,7 +90,7 @@ func TestBuildIngestRequest(t *testing.T) {
 		"api/readme.md": "# API",
 	}
 
-	req := BuildIngestRequest("owner/repo", "abc123", files, true)
+	req := BuildIngestRequest("owner/repo", "abc123", files, nil, true)
 
 	assert.Equal(t, "owner/repo", req.Repo)
 	assert.Equal(t, "abc123", req.CommitSHA)
@@ -114,7 +114,7 @@ func TestBuildIngestRequest_SyncFalse(t *testing.T) {
 		"readme.md": "# Hello",
 	}
 
-	req := BuildIngestRequest("owner/repo", "sha", files, false)
+	req := BuildIngestRequest("owner/repo", "sha", files, nil, false)
 
 	assert.Equal(t, "owner/repo", req.Repo)
 	assert.False(t, req.Sync)
@@ -122,7 +122,7 @@ func TestBuildIngestRequest_SyncFalse(t *testing.T) {
 }
 
 func TestBuildIngestRequest_Empty(t *testing.T) {
-	req := BuildIngestRequest("owner/repo", "sha", map[string]string{}, true)
+	req := BuildIngestRequest("owner/repo", "sha", map[string]string{}, nil, true)
 
 	assert.Equal(t, "owner/repo", req.Repo)
 	assert.True(t, req.Sync)
@@ -140,7 +140,7 @@ paths: {}`,
 		"config.yaml":    "name: my-app\nversion: 1.0.0",
 	}
 
-	req := BuildIngestRequest("owner/repo", "sha", files, false)
+	req := BuildIngestRequest("owner/repo", "sha", files, nil, false)
 
 	// config.yaml is not OpenAPI, so it should be skipped entirely.
 	assert.Len(t, req.Documents, 2)
@@ -164,7 +164,7 @@ paths: {}`,
 		"docs/readme.md": "# Hello",
 	}
 
-	req := BuildIngestRequest("owner/repo", "sha", files, false)
+	req := BuildIngestRequest("owner/repo", "sha", files, nil, false)
 
 	assert.Len(t, req.Documents, 2)
 
@@ -183,7 +183,7 @@ func TestBuildIngestRequest_SkipsNonOpenAPIYAML(t *testing.T) {
 		"docker-compose.yml": "version: '3'\nservices: {}",
 	}
 
-	req := BuildIngestRequest("owner/repo", "sha", files, false)
+	req := BuildIngestRequest("owner/repo", "sha", files, nil, false)
 
 	// Only the markdown file should remain; all YAML/JSON without OpenAPI keys are skipped.
 	assert.Len(t, req.Documents, 1)
@@ -226,12 +226,11 @@ func TestSendIngestRequest_Success(t *testing.T) {
 		},
 	}
 
-	resp, err := pub.SendIngestRequest(t.Context(), req)
+	resp, err := pub.SendIngestRequest(t.Context(), &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
 }
-
 func TestSendIngestRequest_Non2xxStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -243,7 +242,7 @@ func TestSendIngestRequest_Non2xxStatus(t *testing.T) {
 
 	req := core.IngestRequest{Repo: "owner/repo"}
 
-	resp, err := pub.SendIngestRequest(t.Context(), req)
+	resp, err := pub.SendIngestRequest(t.Context(), &req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "server returned HTTP 401")
@@ -254,7 +253,7 @@ func TestSendIngestRequest_ServerDown(t *testing.T) {
 
 	req := core.IngestRequest{Repo: "owner/repo"}
 
-	resp, err := pub.SendIngestRequest(t.Context(), req)
+	resp, err := pub.SendIngestRequest(t.Context(), &req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "HTTP request failed")
@@ -265,7 +264,7 @@ func TestSendIngestRequest_InvalidURL(t *testing.T) {
 
 	req := core.IngestRequest{Repo: "owner/repo"}
 
-	resp, err := pub.SendIngestRequest(t.Context(), req)
+	resp, err := pub.SendIngestRequest(t.Context(), &req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
@@ -278,7 +277,7 @@ func TestSendIngestRequest_ContextCancelled(t *testing.T) {
 
 	req := core.IngestRequest{Repo: "owner/repo"}
 
-	resp, err := pub.SendIngestRequest(ctx, req)
+	resp, err := pub.SendIngestRequest(ctx, &req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
@@ -294,7 +293,7 @@ func TestSendIngestRequest_InvalidJSON(t *testing.T) {
 
 	req := core.IngestRequest{Repo: "owner/repo"}
 
-	resp, err := pub.SendIngestRequest(t.Context(), req)
+	resp, err := pub.SendIngestRequest(t.Context(), &req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -363,4 +362,187 @@ func TestPublish_ServerError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to publish documentation")
+}
+
+func TestExtractImageRefs(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "relative image",
+			content: "![diagram](./images/arch.png)",
+			want:    []string{"./images/arch.png"},
+		},
+		{
+			name:    "multiple images",
+			content: "![a](a.png)\n\n![b](sub/b.jpg)",
+			want:    []string{"a.png", "sub/b.jpg"},
+		},
+		{
+			name:    "skips absolute http URL",
+			content: "![remote](http://example.com/img.png)",
+			want:    nil,
+		},
+		{
+			name:    "skips absolute https URL",
+			content: "![remote](https://example.com/img.png)",
+			want:    nil,
+		},
+		{
+			name:    "skips protocol-relative URL",
+			content: "![cdn](//cdn.example.com/img.png)",
+			want:    nil,
+		},
+		{
+			name:    "skips data URI",
+			content: "![inline](data:image/png;base64,ABC)",
+			want:    nil,
+		},
+		{
+			name:    "skips absolute path",
+			content: "![static](/static/img.png)",
+			want:    nil,
+		},
+		{
+			name:    "no images",
+			content: "# Hello\n\nJust text.",
+			want:    nil,
+		},
+		{
+			name:    "mixed relative and absolute",
+			content: "![local](diagram.png)\n\n![remote](https://example.com/img.png)\n\n![other](../shared/logo.svg)",
+			want:    []string{"diagram.png", "../shared/logo.svg"},
+		},
+		{
+			name:    "empty destination skipped",
+			content: "![empty]()",
+			want:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractImageRefs(tt.content)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCollectAssets(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create image files on disk.
+	imgDir := filepath.Join(dir, "images")
+	require.NoError(t, os.MkdirAll(imgDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(imgDir, "arch.png"), []byte("png-data"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(imgDir, "logo.svg"), []byte("svg-data"), 0o600))
+
+	files := map[string]string{
+		"docs/guide.md":  "![arch](../images/arch.png)\n\n![logo](../images/logo.svg)",
+		"docs/readme.md": "![arch](../images/arch.png)", // duplicate reference
+		"config.yaml":    "name: test",                  // non-markdown, should be skipped
+		"api/petstore.yaml": `openapi: "3.0.0"
+info:
+  title: Test
+  version: "1.0"
+paths: {}`,
+	}
+
+	assets, err := CollectAssets(dir, files)
+	require.NoError(t, err)
+
+	// Should have 2 unique assets (deduplication).
+	assert.Len(t, assets, 2)
+	assert.Equal(t, []byte("png-data"), assets["images/arch.png"])
+	assert.Equal(t, []byte("svg-data"), assets["images/logo.svg"])
+}
+
+func TestCollectAssets_SkipsTraversalOutsideRoot(t *testing.T) {
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"guide.md": "![escaped](../../etc/passwd)",
+	}
+
+	assets, err := CollectAssets(dir, files)
+	require.NoError(t, err)
+	assert.Empty(t, assets)
+}
+
+func TestCollectAssets_SkipsMissingFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"guide.md": "![missing](nonexistent.png)",
+	}
+
+	assets, err := CollectAssets(dir, files)
+	require.NoError(t, err)
+	assert.Empty(t, assets)
+}
+
+func TestCollectAssets_NoMarkdownFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"config.yaml": "name: test",
+	}
+
+	assets, err := CollectAssets(dir, files)
+	require.NoError(t, err)
+	assert.Empty(t, assets)
+}
+
+func TestBuildIngestRequest_WithAssets(t *testing.T) {
+	files := map[string]string{
+		"docs/readme.md": "# Hello\n\n![diagram](images/arch.png)",
+	}
+
+	assets := map[string][]byte{
+		"images/arch.png": {0x89, 0x50, 0x4E, 0x47},
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, assets, true)
+
+	assert.Equal(t, "owner/repo", req.Repo)
+	assert.Equal(t, "sha", req.CommitSHA)
+	assert.True(t, req.Sync)
+	assert.Len(t, req.Documents, 1)
+	assert.Len(t, req.Assets, 1)
+
+	assert.Equal(t, "images/arch.png", req.Assets[0].Path)
+	assert.Equal(t, "upsert", req.Assets[0].Action)
+	assert.NotEmpty(t, req.Assets[0].Content) // base64 encoded
+}
+
+func TestBuildIngestRequest_NilAssets(t *testing.T) {
+	files := map[string]string{
+		"docs/readme.md": "# Hello",
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, nil, false)
+
+	assert.Len(t, req.Documents, 1)
+	assert.Nil(t, req.Assets)
+}
+
+func TestBuildIngestRequest_AssetsSorted(t *testing.T) {
+	files := map[string]string{
+		"docs/readme.md": "# Hello",
+	}
+
+	assets := map[string][]byte{
+		"images/c.png": []byte("c"),
+		"images/a.png": []byte("a"),
+		"images/b.png": []byte("b"),
+	}
+
+	req := BuildIngestRequest("owner/repo", "sha", files, assets, false)
+
+	require.Len(t, req.Assets, 3)
+	assert.Equal(t, "images/a.png", req.Assets[0].Path)
+	assert.Equal(t, "images/b.png", req.Assets[1].Path)
+	assert.Equal(t, "images/c.png", req.Assets[2].Path)
 }
