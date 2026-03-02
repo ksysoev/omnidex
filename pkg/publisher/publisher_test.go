@@ -594,3 +594,26 @@ func TestPublish_CollectFilesError(t *testing.T) {
 	assert.Nil(t, resp)
 	assert.ErrorContains(t, err, "failed to collect files")
 }
+
+func TestCollectAssets_FragmentAndQueryStrippedBeforeFileLookup(t *testing.T) {
+	// Refs like "sprite.svg#icon" or "img.png?raw=1" should resolve to the
+	// underlying filename on disk ("sprite.svg" / "img.png"). The fragment and
+	// query string are URL components, not part of the filesystem path.
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sprite.svg"), []byte("<svg/>"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "img.png"), []byte("png-data"), 0o600))
+
+	files := map[string]string{
+		"guide.md": "![icon](sprite.svg#icon)\n\n![raw](img.png?raw=1)",
+	}
+
+	assets, err := CollectAssets(dir, files)
+	require.NoError(t, err)
+
+	// Both assets should be collected; the fragment/query must not be part of
+	// the resolved key either — keys should match the bare path.
+	assert.Len(t, assets, 2)
+	assert.Equal(t, []byte("<svg/>"), assets["sprite.svg"])
+	assert.Equal(t, []byte("png-data"), assets["img.png"])
+}

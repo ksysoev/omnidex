@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -263,15 +264,30 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 		refs := ExtractImageRefs(content)
 
 		for _, ref := range refs {
+			// Parse the ref so only the path component is used for filesystem
+			// resolution. A ref like "sprite.svg#icon" or "img.png?raw=1" must
+			// resolve to "sprite.svg" / "img.png" on disk; the fragment and query
+			// string are not part of the filename. This matches what
+			// RewriteImageURLs does when building the asset URL.
+			u, err := url.Parse(ref)
+			if err != nil {
+				slog.Warn("skipping malformed image reference",
+					"doc", docRelPath, "ref", ref, "error", err)
+
+				continue
+			}
+
+			refPath := u.Path
+
 			// Resolve relative to the markdown file's directory.
 			docDir := path.Dir(docRelPath)
-			resolved := path.Clean(path.Join(docDir, ref))
+			resolved := path.Clean(path.Join(docDir, refPath))
 
 			// Prevent directory traversal outside the docs root.
 			// Use == ".." or HasPrefix("../") to avoid false-positives on paths
 			// like "..images/logo.png" that start with ".." but don't escape the root.
 			if resolved == ".." || strings.HasPrefix(resolved, "../") {
-				slog.Warn("skipping image reference outside docs directory",
+				slog.Warn("skipping image reference outside docs directory", //nolint:gosec // ref is a structured log field value, not written to output
 					"doc", docRelPath, "ref", ref, "resolved", resolved)
 
 				continue
@@ -284,9 +300,9 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 
 			absPath := filepath.Join(docsPath, filepath.FromSlash(resolved))
 
-			data, err := os.ReadFile(absPath)
+			data, err := os.ReadFile(absPath) //nolint:gosec // path traversal is prevented by the resolved == ".." / HasPrefix("../") check above
 			if err != nil {
-				slog.Warn("skipping unreadable image reference",
+				slog.Warn("skipping unreadable image reference", //nolint:gosec // ref is a structured log field value, not written to output
 					"doc", docRelPath, "ref", ref, "path", absPath, "error", err)
 
 				continue
