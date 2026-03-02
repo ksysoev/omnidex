@@ -253,7 +253,17 @@ func splitQueryTerms(input string) []queryTerm {
 // buildSearchQuery constructs a hybrid Bleve query from user input.
 // For each term it creates a disjunction of match, prefix, and fuzzy queries
 // targeting both title and content fields with appropriate boost values.
-// Multiple terms are combined with a conjunction so all terms must match.
+// Multiple terms are combined with a conjunction in the per-term query path so
+// all specified terms must match there, while some inputs may also receive a
+// full-phrase alternative via a top-level disjunction (see below).
+//
+// For multi-word unquoted queries a full-phrase MatchQuery (AND operator) on
+// both fields is added as an alternative path via a top-level DisjunctionQuery.
+// This handles English stopwords (e.g. "all", "a", "the") that Bleve's default
+// analyzer strips from both the index and per-word MatchQueries, which would
+// otherwise cause the per-word ConjunctionQuery to return zero results.
+// The MatchQuery AND operator skips stopwords internally so the search
+// "List all pets" correctly finds documents containing "list" and "pets".
 func buildSearchQuery(userQuery string) bleveQuery.Query {
 	terms := splitQueryTerms(userQuery)
 	if len(terms) == 0 {
@@ -262,22 +272,61 @@ func buildSearchQuery(userQuery string) bleveQuery.Query {
 
 	termQueries := make([]bleveQuery.Query, 0, len(terms))
 
+	// Count unquoted word terms to determine whether the stopword-tolerant
+	// full-phrase fallback should be applied.
+	wordTermCount := 0
+
 	for _, term := range terms {
 		var disj bleveQuery.Query
 		if term.phrase {
 			disj = buildPhraseQueries(term.text)
 		} else {
 			disj = buildTermQueries(term.text)
+			wordTermCount++
 		}
 
 		termQueries = append(termQueries, disj)
 	}
 
+	var perWordQuery bleveQuery.Query
 	if len(termQueries) == 1 {
-		return termQueries[0]
+		perWordQuery = termQueries[0]
+	} else {
+		perWordQuery = bleve.NewConjunctionQuery(termQueries...)
 	}
 
-	return bleve.NewConjunctionQuery(termQueries...)
+	// For pure multi-word unquoted queries, also try the full phrase as a
+	// single MatchQuery with AND operator on each field. Bleve's MatchQuery
+	// applies the same text analysis pipeline as the indexer, so stopwords are
+	// removed from the requirement set rather than causing the whole query to
+	// fail (e.g. "List all pets" → "list" AND "pet").
+	//
+	// This fallback is intentionally skipped for mixed queries that contain
+	// quoted phrases (e.g. `welcome "getting started" guide`) because passing
+	// the raw input to MatchQuery would ignore the quotes and treat the phrase
+	// terms as individual unordered tokens, breaking exact-phrase semantics.
+	if wordTermCount > 1 && wordTermCount == len(terms) {
+		return bleve.NewDisjunctionQuery(perWordQuery, buildFullPhraseQueries(userQuery))
+	}
+
+	return perWordQuery
+}
+
+// buildFullPhraseQueries creates a disjunction of MatchQuery (AND operator) for
+// title and content fields. The AND operator requires all non-stopword tokens to
+// match, which correctly handles common English stopwords that the analyzer strips.
+func buildFullPhraseQueries(phrase string) bleveQuery.Query {
+	titleQ := bleve.NewMatchQuery(phrase)
+	titleQ.SetField("title")
+	titleQ.SetBoost(8.0)
+	titleQ.SetOperator(bleveQuery.MatchQueryOperatorAnd)
+
+	contentQ := bleve.NewMatchQuery(phrase)
+	contentQ.SetField("content")
+	contentQ.SetBoost(4.0)
+	contentQ.SetOperator(bleveQuery.MatchQueryOperatorAnd)
+
+	return bleve.NewDisjunctionQuery(titleQ, contentQ)
 }
 
 // buildPhraseQueries creates a disjunction of MatchPhraseQuery for title and content fields.

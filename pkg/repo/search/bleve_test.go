@@ -733,6 +733,103 @@ func TestBleveEngine_ListByRepoManyDocuments(t *testing.T) {
 	assert.ElementsMatch(t, expected, ids)
 }
 
+func TestBleveEngine_SearchStopwordInPhrase(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	// Simulate an indexed OpenAPI operation whose plain-text contains the
+	// summary "List all pets" — a realistic phrase with "all" as a stopword.
+	doc := core.Document{
+		ID:        "owner/repo/petstore.yaml",
+		Repo:      "owner/repo",
+		Path:      "petstore.yaml",
+		Title:     "Petstore API",
+		UpdatedAt: time.Now(),
+	}
+
+	err = engine.Index(t.Context(), doc, "Petstore API\nGET /pets\nList all pets\nReturns all pets from the system.")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{
+			name:  "exact summary with stopword",
+			query: "List all pets",
+		},
+		{
+			name:  "summary without stopword",
+			query: "List pets",
+		},
+		{
+			name:  "lowercase with stopword",
+			query: "list all pets",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := engine.Search(t.Context(), tc.query, core.SearchOpts{Limit: 10})
+			require.NoError(t, err)
+			assert.Greater(t, results.Total, uint64(0), "query %q should find the document", tc.query)
+
+			if len(results.Hits) > 0 {
+				assert.Equal(t, "owner/repo/petstore.yaml", results.Hits[0].ID)
+			}
+		})
+	}
+}
+
+func TestBleveEngine_SearchMixedPhraseAndWordQuery(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	// matchDoc contains "getting started" as an adjacent phrase AND "guide".
+	matchDoc := core.Document{
+		ID:        "owner/repo/match.md",
+		Repo:      "owner/repo",
+		Path:      "match.md",
+		Title:     "Getting Started Guide",
+		UpdatedAt: time.Now(),
+	}
+
+	// noMatchDoc contains "getting" and "started" but not adjacent, and "guide".
+	// The quoted phrase "getting started" should NOT match this document.
+	noMatchDoc := core.Document{
+		ID:        "owner/repo/no-match.md",
+		Repo:      "owner/repo",
+		Path:      "no-match.md",
+		Title:     "Guide",
+		UpdatedAt: time.Now(),
+	}
+
+	err = engine.Index(t.Context(), matchDoc, "getting started guide for new users")
+	require.NoError(t, err)
+
+	err = engine.Index(t.Context(), noMatchDoc, "getting the guide started for new users")
+	require.NoError(t, err)
+
+	// Quoted phrase + unquoted word: exact phrase semantics must be preserved.
+	// The stopword-tolerant fallback must NOT fire for mixed queries so that
+	// "getting started" is not reduced to unordered individual tokens.
+	results, err := engine.Search(t.Context(), `guide "getting started"`, core.SearchOpts{Limit: 10})
+	require.NoError(t, err)
+	require.Greater(t, results.Total, uint64(0), `mixed query should find the exact-phrase document`)
+
+	assert.Equal(t, "owner/repo/match.md", results.Hits[0].ID, "only the document with adjacent 'getting started' should rank first")
+}
+
 func TestBleveEngine_ListByRepoAfterRemove(t *testing.T) {
 	tmpDir := t.TempDir()
 	indexPath := filepath.Join(tmpDir, "test.bleve")
