@@ -253,7 +253,9 @@ func splitQueryTerms(input string) []queryTerm {
 // buildSearchQuery constructs a hybrid Bleve query from user input.
 // For each term it creates a disjunction of match, prefix, and fuzzy queries
 // targeting both title and content fields with appropriate boost values.
-// Multiple terms are combined with a conjunction so all terms must match.
+// Multiple terms are combined with a conjunction in the per-term query path so
+// all specified terms must match there, while some inputs may also receive a
+// full-phrase alternative via a top-level disjunction (see below).
 //
 // For multi-word unquoted queries a full-phrase MatchQuery (AND operator) on
 // both fields is added as an alternative path via a top-level DisjunctionQuery.
