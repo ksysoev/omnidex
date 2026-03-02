@@ -733,6 +733,59 @@ func TestBleveEngine_ListByRepoManyDocuments(t *testing.T) {
 	assert.ElementsMatch(t, expected, ids)
 }
 
+func TestBleveEngine_SearchStopwordInPhrase(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "test.bleve")
+
+	engine, err := NewBleve(indexPath)
+	require.NoError(t, err)
+
+	defer engine.Close()
+
+	// Simulate an indexed OpenAPI operation whose plain-text contains the
+	// summary "List all pets" — a realistic phrase with "all" as a stopword.
+	doc := core.Document{
+		ID:        "owner/repo/petstore.yaml",
+		Repo:      "owner/repo",
+		Path:      "petstore.yaml",
+		Title:     "Petstore API",
+		UpdatedAt: time.Now(),
+	}
+
+	err = engine.Index(t.Context(), doc, "Petstore API\nGET /pets\nList all pets\nReturns all pets from the system.")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{
+			name:  "exact summary with stopword",
+			query: "List all pets",
+		},
+		{
+			name:  "summary without stopword",
+			query: "List pets",
+		},
+		{
+			name:  "lowercase with stopword",
+			query: "list all pets",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := engine.Search(t.Context(), tc.query, core.SearchOpts{Limit: 10})
+			require.NoError(t, err)
+			assert.Greater(t, results.Total, uint64(0), "query %q should find the document", tc.query)
+
+			if len(results.Hits) > 0 {
+				assert.Equal(t, "owner/repo/petstore.yaml", results.Hits[0].ID)
+			}
+		})
+	}
+}
+
 func TestBleveEngine_ListByRepoAfterRemove(t *testing.T) {
 	tmpDir := t.TempDir()
 	indexPath := filepath.Join(tmpDir, "test.bleve")
