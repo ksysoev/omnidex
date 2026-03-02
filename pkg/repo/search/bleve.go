@@ -270,10 +270,9 @@ func buildSearchQuery(userQuery string) bleveQuery.Query {
 
 	termQueries := make([]bleveQuery.Query, 0, len(terms))
 
-	// Track whether there are multiple unquoted (word) terms so we can add a
-	// full-phrase fallback that tolerates stopwords.
+	// Count unquoted word terms to determine whether the stopword-tolerant
+	// full-phrase fallback should be applied.
 	wordTermCount := 0
-	fullPhraseText := ""
 
 	for _, term := range terms {
 		var disj bleveQuery.Query
@@ -282,7 +281,6 @@ func buildSearchQuery(userQuery string) bleveQuery.Query {
 		} else {
 			disj = buildTermQueries(term.text)
 			wordTermCount++
-			fullPhraseText = userQuery
 		}
 
 		termQueries = append(termQueries, disj)
@@ -295,12 +293,18 @@ func buildSearchQuery(userQuery string) bleveQuery.Query {
 		perWordQuery = bleve.NewConjunctionQuery(termQueries...)
 	}
 
-	// For multi-word unquoted queries, also try the full phrase as a single
-	// MatchQuery with AND operator on each field. Bleve's MatchQuery applies
-	// the same text analysis pipeline as the indexer, so stopwords are removed
-	// from the requirement set rather than causing the whole query to fail.
-	if wordTermCount > 1 {
-		return bleve.NewDisjunctionQuery(perWordQuery, buildFullPhraseQueries(fullPhraseText))
+	// For pure multi-word unquoted queries, also try the full phrase as a
+	// single MatchQuery with AND operator on each field. Bleve's MatchQuery
+	// applies the same text analysis pipeline as the indexer, so stopwords are
+	// removed from the requirement set rather than causing the whole query to
+	// fail (e.g. "List all pets" → "list" AND "pet").
+	//
+	// This fallback is intentionally skipped for mixed queries that contain
+	// quoted phrases (e.g. `welcome "getting started" guide`) because passing
+	// the raw input to MatchQuery would ignore the quotes and treat the phrase
+	// terms as individual unordered tokens, breaking exact-phrase semantics.
+	if wordTermCount > 1 && wordTermCount == len(terms) {
+		return bleve.NewDisjunctionQuery(perWordQuery, buildFullPhraseQueries(userQuery))
 	}
 
 	return perWordQuery
