@@ -22,8 +22,8 @@ const (
 	assetsDir    = "assets"
 )
 
-// ErrNotFound is returned when a requested document does not exist.
-var ErrNotFound = errors.New("document not found")
+// ErrNotFound is returned when a requested document or asset does not exist.
+var ErrNotFound = errors.New("not found")
 
 // ErrInvalidPath is returned when a document path attempts directory traversal.
 var ErrInvalidPath = errors.New("invalid path: directory traversal not allowed")

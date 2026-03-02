@@ -175,7 +175,9 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, assets 
 	}
 
 	// Build asset entries with base64 encoding.
-	var ingestAssets []core.IngestAsset
+	// Always set a non-nil pointer so the server knows this client is aware of
+	// the assets field and can correctly run stale-asset sync cleanup.
+	ingestAssets := make([]core.IngestAsset, 0, len(assets))
 
 	if len(assets) > 0 {
 		assetPaths := make([]string, 0, len(assets))
@@ -184,8 +186,6 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, assets 
 		}
 
 		sort.Strings(assetPaths)
-
-		ingestAssets = make([]core.IngestAsset, 0, len(assets))
 
 		for _, p := range assetPaths {
 			ingestAssets = append(ingestAssets, core.IngestAsset{
@@ -200,7 +200,7 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, assets 
 		Repo:      repo,
 		CommitSHA: commitSHA,
 		Documents: documents,
-		Assets:    ingestAssets,
+		Assets:    &ingestAssets,
 		Sync:      sync,
 	}
 }
@@ -268,7 +268,9 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 			resolved := path.Clean(path.Join(docDir, ref))
 
 			// Prevent directory traversal outside the docs root.
-			if strings.HasPrefix(resolved, "..") {
+			// Use == ".." or HasPrefix("../") to avoid false-positives on paths
+			// like "..images/logo.png" that start with ".." but don't escape the root.
+			if resolved == ".." || strings.HasPrefix(resolved, "../") {
 				slog.Warn("skipping image reference outside docs directory",
 					"doc", docRelPath, "ref", ref, "resolved", resolved)
 

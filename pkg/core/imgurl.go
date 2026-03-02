@@ -1,6 +1,7 @@
 package core
 
 import (
+	"net/url"
 	"path"
 	"regexp"
 	"strings"
@@ -35,11 +36,21 @@ func RewriteImageURLs(html []byte, repo, docPath string) []byte {
 		resolved := path.Clean(path.Join(docDir, src))
 
 		// Prevent directory traversal outside the repo root.
-		if strings.HasPrefix(resolved, "..") {
+		// Use == ".." or HasPrefix("../") to avoid false-positives on paths like
+		// "..images/logo.png" that start with ".." but don't escape the root.
+		if resolved == ".." || strings.HasPrefix(resolved, "../") {
 			return match
 		}
 
-		newSrc := "/assets/" + repo + "/" + resolved
+		// Build the rewritten src, percent-encoding each path segment so that
+		// paths containing spaces, '#', '?', etc. produce valid, unambiguous URLs.
+		// url.JoinPath encodes each segment individually and never double-encodes
+		// slashes that are part of the path structure.
+		newSrc, err := url.JoinPath("/assets/", repo, resolved)
+		if err != nil {
+			// Malformed segments — leave the original src unchanged.
+			return match
+		}
 
 		buf := make([]byte, 0, len(submatch[1])+len(newSrc)+len(submatch[3]))
 		buf = append(buf, submatch[1]...)

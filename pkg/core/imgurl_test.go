@@ -87,6 +87,27 @@ func TestRewriteImageURLs(t *testing.T) {
 			want:    `<img src="../../secret.png" alt="escaped">`,
 		},
 		{
+			name:    "allows path starting with double-dot that is not a traversal",
+			html:    `<img src="..images/logo.png" alt="dotdot">`,
+			repo:    "owner/repo",
+			docPath: "docs/guide.md",
+			want:    `<img src="/assets/owner/repo/docs/..images/logo.png" alt="dotdot">`,
+		},
+		{
+			name:    "percent-encodes spaces in path",
+			html:    `<img src="my image.png" alt="spaced">`,
+			repo:    "owner/repo",
+			docPath: "docs/guide.md",
+			want:    `<img src="/assets/owner/repo/docs/my%20image.png" alt="spaced">`,
+		},
+		{
+			name:    "percent-encodes hash in path",
+			html:    `<img src="img#1.png" alt="hash">`,
+			repo:    "owner/repo",
+			docPath: "docs/guide.md",
+			want:    `<img src="/assets/owner/repo/docs/img%231.png" alt="hash">`,
+		},
+		{
 			name:    "rewrites multiple images",
 			html:    `<p><img src="a.png" alt="a"></p><p><img src="b.png" alt="b"></p>`,
 			repo:    "owner/repo",

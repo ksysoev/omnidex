@@ -471,6 +471,27 @@ func TestCollectAssets_SkipsTraversalOutsideRoot(t *testing.T) {
 	assert.Empty(t, assets)
 }
 
+func TestCollectAssets_AllowsDoubleDotDirName(t *testing.T) {
+	// A file named "..images/logo.png" starts with ".." but is NOT a traversal.
+	// The old HasPrefix("..") check would incorrectly reject it; after the fix
+	// it must be collected (or at least attempted — skipped if unreadable).
+	dir := t.TempDir()
+
+	// Create the unusual directory and file.
+	dotDotDir := filepath.Join(dir, "..images")
+	require.NoError(t, os.MkdirAll(dotDotDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dotDotDir, "logo.png"), []byte("png"), 0o600))
+
+	files := map[string]string{
+		"guide.md": "![logo](..images/logo.png)",
+	}
+
+	assets, err := CollectAssets(dir, files)
+	require.NoError(t, err)
+	assert.Len(t, assets, 1)
+	assert.Equal(t, []byte("png"), assets["..images/logo.png"])
+}
+
 func TestCollectAssets_SkipsMissingFiles(t *testing.T) {
 	dir := t.TempDir()
 
@@ -510,14 +531,18 @@ func TestBuildIngestRequest_WithAssets(t *testing.T) {
 	assert.Equal(t, "sha", req.CommitSHA)
 	assert.True(t, req.Sync)
 	assert.Len(t, req.Documents, 1)
-	assert.Len(t, req.Assets, 1)
+	require.NotNil(t, req.Assets)
+	assert.Len(t, *req.Assets, 1)
 
-	assert.Equal(t, "images/arch.png", req.Assets[0].Path)
-	assert.Equal(t, "upsert", req.Assets[0].Action)
-	assert.NotEmpty(t, req.Assets[0].Content) // base64 encoded
+	assert.Equal(t, "images/arch.png", (*req.Assets)[0].Path)
+	assert.Equal(t, "upsert", (*req.Assets)[0].Action)
+	assert.NotEmpty(t, (*req.Assets)[0].Content) // base64 encoded
 }
 
 func TestBuildIngestRequest_NilAssets(t *testing.T) {
+	// Even when no assets map is provided, BuildIngestRequest always sets a
+	// non-nil Assets pointer so the server knows this client supports assets
+	// and can correctly run stale-asset sync cleanup.
 	files := map[string]string{
 		"docs/readme.md": "# Hello",
 	}
@@ -525,7 +550,8 @@ func TestBuildIngestRequest_NilAssets(t *testing.T) {
 	req := BuildIngestRequest("owner/repo", "sha", files, nil, false)
 
 	assert.Len(t, req.Documents, 1)
-	assert.Nil(t, req.Assets)
+	require.NotNil(t, req.Assets)
+	assert.Empty(t, *req.Assets)
 }
 
 func TestBuildIngestRequest_AssetsSorted(t *testing.T) {
@@ -541,8 +567,9 @@ func TestBuildIngestRequest_AssetsSorted(t *testing.T) {
 
 	req := BuildIngestRequest("owner/repo", "sha", files, assets, false)
 
-	require.Len(t, req.Assets, 3)
-	assert.Equal(t, "images/a.png", req.Assets[0].Path)
-	assert.Equal(t, "images/b.png", req.Assets[1].Path)
-	assert.Equal(t, "images/c.png", req.Assets[2].Path)
+	require.NotNil(t, req.Assets)
+	require.Len(t, *req.Assets, 3)
+	assert.Equal(t, "images/a.png", (*req.Assets)[0].Path)
+	assert.Equal(t, "images/b.png", (*req.Assets)[1].Path)
+	assert.Equal(t, "images/c.png", (*req.Assets)[2].Path)
 }

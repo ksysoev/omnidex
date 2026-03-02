@@ -126,22 +126,24 @@ func (s *Service) IngestDocuments(ctx context.Context, req *IngestRequest) (*Ing
 	// Process assets (images, diagrams, etc.).
 	var assetsStored, assetsDeleted int
 
-	for _, asset := range req.Assets {
-		switch asset.Action {
-		case actionUpsert:
-			if err := s.upsertAsset(ctx, req.Repo, asset); err != nil {
-				return nil, fmt.Errorf("failed to upsert asset %s: %w", asset.Path, err)
-			}
+	if req.Assets != nil {
+		for _, asset := range *req.Assets {
+			switch asset.Action {
+			case actionUpsert:
+				if err := s.upsertAsset(ctx, req.Repo, asset); err != nil {
+					return nil, fmt.Errorf("failed to upsert asset %s: %w", asset.Path, err)
+				}
 
-			assetsStored++
-		case actionDelete:
-			if err := s.store.DeleteAsset(ctx, req.Repo, asset.Path); err != nil {
-				return nil, fmt.Errorf("failed to delete asset %s: %w", asset.Path, err)
-			}
+				assetsStored++
+			case actionDelete:
+				if err := s.store.DeleteAsset(ctx, req.Repo, asset.Path); err != nil {
+					return nil, fmt.Errorf("failed to delete asset %s: %w", asset.Path, err)
+				}
 
-			assetsDeleted++
-		default:
-			slog.WarnContext(ctx, "unknown asset action", "action", asset.Action, "path", asset.Path)
+				assetsDeleted++
+			default:
+				slog.WarnContext(ctx, "unknown asset action", "action", asset.Action, "path", asset.Path)
+			}
 		}
 	}
 
@@ -154,10 +156,12 @@ func (s *Service) IngestDocuments(ctx context.Context, req *IngestRequest) (*Ing
 		deleted += syncDeleted
 
 		// Only sync-delete stale assets when the request explicitly includes an
-		// assets list. When Assets is nil (e.g. from an older client that doesn't
-		// know about the assets field), it is indistinguishable from "no assets"
-		// and blindly running cleanup would delete all stored assets for the repo.
-		if len(req.Assets) > 0 {
+		// assets field. A nil Assets pointer means the field was absent from the
+		// JSON (e.g. an older client) — running cleanup in that case would silently
+		// wipe all stored assets for the repo. A non-nil pointer with an empty
+		// slice is an explicit "no assets" from a new client and correctly triggers
+		// cleanup to remove all previously stored assets.
+		if req.Assets != nil {
 			syncAssetsDeleted, err := s.syncDeleteStaleAssets(ctx, req)
 			if err != nil {
 				return nil, fmt.Errorf("failed to sync stale assets: %w", err)
@@ -459,14 +463,16 @@ func (s *Service) upsertAsset(ctx context.Context, repo string, asset IngestAsse
 
 // syncDeleteStaleAssets removes stored assets that are not present in the ingest request.
 // It returns the number of assets removed.
+// Callers must only invoke this when req.Assets is non-nil (i.e. the field was
+// explicitly provided by the client).
 func (s *Service) syncDeleteStaleAssets(ctx context.Context, req *IngestRequest) (int, error) {
 	stored, err := s.store.ListAssets(ctx, req.Repo)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list stored assets for repo %s: %w", req.Repo, err)
 	}
 
-	requestPaths := make(map[string]struct{}, len(req.Assets))
-	for _, asset := range req.Assets {
+	requestPaths := make(map[string]struct{}, len(*req.Assets))
+	for _, asset := range *req.Assets {
 		if asset.Action == actionUpsert {
 			requestPaths[asset.Path] = struct{}{}
 		}

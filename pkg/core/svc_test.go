@@ -47,7 +47,7 @@ func TestIngestDocuments_UpsertAsset(t *testing.T) {
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
-		Assets: []IngestAsset{
+		Assets: &[]IngestAsset{
 			{Path: "images/arch.png", Content: "cG5nLWRhdGE=", Action: "upsert"}, // decodes to "png-data"
 		},
 	}
@@ -66,7 +66,7 @@ func TestIngestDocuments_DeleteAsset(t *testing.T) {
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
-		Assets: []IngestAsset{
+		Assets: &[]IngestAsset{
 			{Path: "images/old.png", Action: "delete"},
 		},
 	}
@@ -83,7 +83,7 @@ func TestIngestDocuments_AssetUpsertInvalidBase64(t *testing.T) {
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
-		Assets: []IngestAsset{
+		Assets: &[]IngestAsset{
 			{Path: "images/bad.png", Content: "not-valid-base64!!!", Action: "upsert"},
 		},
 	}
@@ -123,7 +123,7 @@ func TestIngestDocuments_SyncDeletesStaleAssets(t *testing.T) {
 		Documents: []IngestDocument{
 			{Path: "doc.md", Content: content, Action: "upsert"},
 		},
-		Assets: []IngestAsset{
+		Assets: &[]IngestAsset{
 			{Path: "images/keep.png", Content: "ZGF0YQ==", Action: "upsert"}, // decodes to "data"
 		},
 	}
@@ -136,7 +136,7 @@ func TestIngestDocuments_SyncDeletesStaleAssets(t *testing.T) {
 }
 
 func TestIngestDocuments_SyncWithNoAssetsDoesNotDeleteStoredAssets(t *testing.T) {
-	// When a sync request has no assets (nil slice, e.g. from an older client),
+	// When a sync request has no assets (nil pointer, e.g. from an older client),
 	// stale-asset cleanup must NOT run and existing stored assets must be preserved.
 	svc, store, search, renderer := newTestService(t)
 	ctx := t.Context()
@@ -162,12 +162,51 @@ func TestIngestDocuments_SyncWithNoAssetsDoesNotDeleteStoredAssets(t *testing.T)
 		Documents: []IngestDocument{
 			{Path: "doc.md", Content: content, Action: "upsert"},
 		},
-		// Assets intentionally omitted (nil) — simulates an older client.
+		// Assets intentionally omitted (nil pointer) — simulates an older client.
 	}
 
 	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_SyncWithEmptyAssetsDeletesAllStoredAssets(t *testing.T) {
+	// When a sync request explicitly sends an empty assets list (non-nil pointer,
+	// length zero), all stored assets for the repo must be deleted.
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md"},
+	}, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
+
+	// All stored assets should be deleted since the explicit empty list means
+	// "no assets in this publish".
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return([]string{"images/old.png"}, nil)
+	store.EXPECT().DeleteAsset(mock.Anything, "owner/repo", "images/old.png").Return(nil)
+
+	emptyAssets := []IngestAsset{}
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+		Assets: &emptyAssets, // explicit empty list from a new client
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.AssetsDeleted)
 }
 
 func TestIngestDocuments_UpsertAssetEmptyPath(t *testing.T) {
@@ -176,7 +215,7 @@ func TestIngestDocuments_UpsertAssetEmptyPath(t *testing.T) {
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
-		Assets: []IngestAsset{
+		Assets: &[]IngestAsset{
 			{Path: "", Content: "ZGF0YQ==", Action: "upsert"},
 		},
 	}
@@ -193,7 +232,7 @@ func TestIngestDocuments_UpsertAssetEmptyContent(t *testing.T) {
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
-		Assets: []IngestAsset{
+		Assets: &[]IngestAsset{
 			{Path: "images/arch.png", Content: "", Action: "upsert"},
 		},
 	}

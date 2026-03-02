@@ -67,11 +67,16 @@ type SearchOpts struct {
 }
 
 // IngestRequest represents a batch document ingest request from a GitHub Action.
+//
+// Assets uses a pointer-to-slice so the server can distinguish between an older
+// client that omits the field entirely (nil pointer → skip stale-asset cleanup)
+// and a newer client that explicitly sends an empty list (non-nil pointer with
+// length zero → run cleanup, which will delete all stored assets for the repo).
 type IngestRequest struct {
+	Assets    *[]IngestAsset   `json:"assets,omitempty"`
 	Repo      string           `json:"repo"`
 	CommitSHA string           `json:"commit_sha"`
 	Documents []IngestDocument `json:"documents"`
-	Assets    []IngestAsset    `json:"assets,omitempty"`
 	Sync      bool             `json:"sync,omitempty"`
 }
 
