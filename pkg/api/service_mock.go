@@ -24,6 +24,66 @@ func (_m *MockService) EXPECT() *MockService_Expecter {
 	return &MockService_Expecter{mock: &_m.Mock}
 }
 
+// GetAsset provides a mock function with given fields: ctx, repo, path
+func (_m *MockService) GetAsset(ctx context.Context, repo string, path string) ([]byte, error) {
+	ret := _m.Called(ctx, repo, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAsset")
+	}
+
+	var r0 []byte
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) ([]byte, error)); ok {
+		return rf(ctx, repo, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) []byte); ok {
+		r0 = rf(ctx, repo, path)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, repo, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockService_GetAsset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAsset'
+type MockService_GetAsset_Call struct {
+	*mock.Call
+}
+
+// GetAsset is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+//   - path string
+func (_e *MockService_Expecter) GetAsset(ctx interface{}, repo interface{}, path interface{}) *MockService_GetAsset_Call {
+	return &MockService_GetAsset_Call{Call: _e.mock.On("GetAsset", ctx, repo, path)}
+}
+
+func (_c *MockService_GetAsset_Call) Run(run func(ctx context.Context, repo string, path string)) *MockService_GetAsset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockService_GetAsset_Call) Return(_a0 []byte, _a1 error) *MockService_GetAsset_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockService_GetAsset_Call) RunAndReturn(run func(context.Context, string, string) ([]byte, error)) *MockService_GetAsset_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDocument provides a mock function with given fields: ctx, repo, path
 func (_m *MockService) GetDocument(ctx context.Context, repo string, path string) (core.Document, []byte, []core.Heading, error) {
 	ret := _m.Called(ctx, repo, path)
@@ -101,7 +161,7 @@ func (_c *MockService_GetDocument_Call) RunAndReturn(run func(context.Context, s
 }
 
 // IngestDocuments provides a mock function with given fields: ctx, req
-func (_m *MockService) IngestDocuments(ctx context.Context, req core.IngestRequest) (*core.IngestResponse, error) {
+func (_m *MockService) IngestDocuments(ctx context.Context, req *core.IngestRequest) (*core.IngestResponse, error) {
 	ret := _m.Called(ctx, req)
 
 	if len(ret) == 0 {
@@ -110,10 +170,10 @@ func (_m *MockService) IngestDocuments(ctx context.Context, req core.IngestReque
 
 	var r0 *core.IngestResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, core.IngestRequest) (*core.IngestResponse, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *core.IngestRequest) (*core.IngestResponse, error)); ok {
 		return rf(ctx, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, core.IngestRequest) *core.IngestResponse); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *core.IngestRequest) *core.IngestResponse); ok {
 		r0 = rf(ctx, req)
 	} else {
 		if ret.Get(0) != nil {
@@ -121,7 +181,7 @@ func (_m *MockService) IngestDocuments(ctx context.Context, req core.IngestReque
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, core.IngestRequest) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *core.IngestRequest) error); ok {
 		r1 = rf(ctx, req)
 	} else {
 		r1 = ret.Error(1)
@@ -137,14 +197,14 @@ type MockService_IngestDocuments_Call struct {
 
 // IngestDocuments is a helper method to define mock.On call
 //   - ctx context.Context
-//   - req core.IngestRequest
+//   - req *core.IngestRequest
 func (_e *MockService_Expecter) IngestDocuments(ctx interface{}, req interface{}) *MockService_IngestDocuments_Call {
 	return &MockService_IngestDocuments_Call{Call: _e.mock.On("IngestDocuments", ctx, req)}
 }
 
-func (_c *MockService_IngestDocuments_Call) Run(run func(ctx context.Context, req core.IngestRequest)) *MockService_IngestDocuments_Call {
+func (_c *MockService_IngestDocuments_Call) Run(run func(ctx context.Context, req *core.IngestRequest)) *MockService_IngestDocuments_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(core.IngestRequest))
+		run(args[0].(context.Context), args[1].(*core.IngestRequest))
 	})
 	return _c
 }
@@ -154,7 +214,7 @@ func (_c *MockService_IngestDocuments_Call) Return(_a0 *core.IngestResponse, _a1
 	return _c
 }
 
-func (_c *MockService_IngestDocuments_Call) RunAndReturn(run func(context.Context, core.IngestRequest) (*core.IngestResponse, error)) *MockService_IngestDocuments_Call {
+func (_c *MockService_IngestDocuments_Call) RunAndReturn(run func(context.Context, *core.IngestRequest) (*core.IngestResponse, error)) *MockService_IngestDocuments_Call {
 	_c.Call.Return(run)
 	return _c
 }

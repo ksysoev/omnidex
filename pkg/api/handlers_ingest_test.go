@@ -29,7 +29,11 @@ func TestIngestDocs_Success(t *testing.T) {
 		},
 	}
 
-	svc.EXPECT().IngestDocuments(mock.Anything, ingestReq).Return(&core.IngestResponse{
+	svc.EXPECT().IngestDocuments(mock.Anything, mock.MatchedBy(func(r *core.IngestRequest) bool {
+		return r.Repo == ingestReq.Repo &&
+			r.CommitSHA == ingestReq.CommitSHA &&
+			len(r.Documents) == len(ingestReq.Documents)
+	})).Return(&core.IngestResponse{
 		Indexed: 1,
 		Deleted: 0,
 	}, nil)
@@ -140,7 +144,9 @@ func TestIngestDocs_ServiceError(t *testing.T) {
 		},
 	}
 
-	svc.EXPECT().IngestDocuments(mock.Anything, ingestReq).Return(nil, fmt.Errorf("storage failure"))
+	svc.EXPECT().IngestDocuments(mock.Anything, mock.MatchedBy(func(r *core.IngestRequest) bool {
+		return r.Repo == ingestReq.Repo
+	})).Return(nil, fmt.Errorf("storage failure"))
 
 	api := &API{svc: svc, views: views}
 
@@ -156,6 +162,35 @@ func TestIngestDocs_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "failed to process documents")
+}
+
+func TestIngestDocs_BodyTooLarge(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	// Configure a 1 MiB limit so we can craft a body that exceeds it.
+	api := &API{
+		svc:   svc,
+		views: views,
+		config: Config{
+			MaxIngestBodyMiB: 1,
+		},
+	}
+
+	// Build a valid JSON object whose string value pushes the body over 1 MiB.
+	// The outer JSON wrapper is ~20 bytes; the string payload fills the rest.
+	padding := strings.Repeat("a", 1*1024*1024+1)
+	bigBody := fmt.Sprintf(`{"repo":"owner/repo","big":%q}`, padding)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/docs", strings.NewReader(bigBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+
+	api.ingestDocs(rec, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	assert.Contains(t, rec.Body.String(), "request body too large")
 }
 
 func TestListRepos_Success(t *testing.T) {

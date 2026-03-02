@@ -23,6 +23,9 @@ func (a *API) newMux() *http.ServeMux {
 	// Static files.
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
+	// Asset serving (images, diagrams, etc. stored alongside documents).
+	mux.Handle("GET /assets/{owner}/{repo}/{path...}", middleware.Use(a.assetPage, withReqID))
+
 	// Portal routes (public).
 	mux.Handle("GET /search", middleware.Use(a.searchPage, withReqID))
 	mux.Handle("GET /docs/{owner}/{repo}/{path...}", middleware.Use(a.docPage, withReqID))

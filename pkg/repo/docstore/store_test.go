@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -518,4 +519,363 @@ func TestStore_CleanEmptyDirsWithRemainingFiles(t *testing.T) {
 	got, err := store.Get(t.Context(), "owner/repo", "subdir/b.md")
 	require.NoError(t, err)
 	assert.Equal(t, "b.md", got.Title)
+}
+
+func TestStore_SaveAndGetAsset(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	data := []byte{0x89, 0x50, 0x4E, 0x47} // PNG magic bytes
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/arch.png", data)
+	require.NoError(t, err)
+
+	got, err := store.GetAsset(t.Context(), "owner/repo", "images/arch.png")
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
+}
+
+func TestStore_GetAssetNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	_, err = store.GetAsset(t.Context(), "owner/repo", "nonexistent.png")
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestStore_DeleteAsset(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	data := []byte("fake image data")
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "img.png", data)
+	require.NoError(t, err)
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", "img.png")
+	require.NoError(t, err)
+
+	// Should be gone now.
+	_, err = store.GetAsset(t.Context(), "owner/repo", "img.png")
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestStore_DeleteAssetNonexistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Deleting a non-existent asset should not error (idempotent).
+	err = store.DeleteAsset(t.Context(), "owner/repo", "nope.png")
+	assert.NoError(t, err)
+}
+
+func TestStore_ListAssets(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// No assets yet — should return nil.
+	paths, err := store.ListAssets(t.Context(), "owner/repo")
+	require.NoError(t, err)
+	assert.Nil(t, paths)
+
+	// Save some assets.
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/b.png", []byte("b"))
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/a.png", []byte("a"))
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "diagrams/arch.svg", []byte("svg"))
+	require.NoError(t, err)
+
+	paths, err = store.ListAssets(t.Context(), "owner/repo")
+	require.NoError(t, err)
+
+	// Should be sorted alphabetically.
+	assert.Equal(t, []string{
+		"diagrams/arch.svg",
+		"images/a.png",
+		"images/b.png",
+	}, paths)
+}
+
+func TestStore_DeleteAssetCleansEmptyDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "deep/nested/img.png", []byte("data"))
+	require.NoError(t, err)
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", "deep/nested/img.png")
+	require.NoError(t, err)
+
+	// The nested directories should be cleaned up.
+	_, err = os.Stat(filepath.Join(tmpDir, "owner", "repo", "assets", "deep"))
+	assert.True(t, os.IsNotExist(err), "expected deep directory to be cleaned up")
+}
+
+func TestStore_AssetPathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Use a path that escapes outside the basePath entirely.
+	traversalPath := "../../../../../../../../etc/passwd"
+
+	// Attempt to save with path traversal — should be rejected.
+	err = store.SaveAsset(t.Context(), "owner/repo", traversalPath, []byte("bad"))
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	// Attempt to get with path traversal.
+	_, err = store.GetAsset(t.Context(), "owner/repo", traversalPath)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	// Attempt to delete with path traversal.
+	err = store.DeleteAsset(t.Context(), "owner/repo", traversalPath)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+}
+
+// TestStore_AssetPathEscapesAssetsDir verifies that a path like "../docs/readme.md"
+// is rejected even though it resolves to a location still inside basePath.
+// Without the validateAssetRelPath guard, validatePath alone would allow this,
+// letting the asset API read/write/delete doc files.
+func TestStore_AssetPathEscapesAssetsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// First, create a real doc so the target path actually exists on disk.
+	doc := core.Document{
+		ID:        "owner/repo/secret.md",
+		Repo:      "owner/repo",
+		Path:      "secret.md",
+		Title:     "Secret",
+		Content:   "top secret",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.Save(t.Context(), doc))
+
+	// "../docs/secret.md" resolves to {basePath}/owner/repo/docs/secret.md —
+	// still under basePath but outside the assets/ subdirectory.
+	escapingPath := "../docs/secret.md"
+
+	err = store.SaveAsset(t.Context(), "owner/repo", escapingPath, []byte("overwrite"))
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	_, err = store.GetAsset(t.Context(), "owner/repo", escapingPath)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", escapingPath)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+}
+
+func TestStore_SaveAssetOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "img.png", []byte("version1"))
+	require.NoError(t, err)
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "img.png", []byte("version2"))
+	require.NoError(t, err)
+
+	got, err := store.GetAsset(t.Context(), "owner/repo", "img.png")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("version2"), got)
+}
+
+func TestNew_MkdirAllFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	// Create a file where a directory would need to be created.
+	tmpDir := t.TempDir()
+	blocker := filepath.Join(tmpDir, "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
+
+	// Try to create a store rooted inside the file — MkdirAll must fail.
+	_, err := New(filepath.Join(blocker, "subdir"))
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to create storage directory")
+}
+
+func TestStore_Save_WriteContentFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// First save a doc to create the repo structure.
+	doc := core.Document{
+		ID:        "owner/repo/readme.md",
+		Repo:      "owner/repo",
+		Path:      "readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	require.NoError(t, err)
+
+	// Make the docs directory read-only so the next write fails.
+	docsDir := filepath.Join(tmpDir, "owner", "repo", "docs")
+	require.NoError(t, os.Chmod(docsDir, 0o555))
+
+	t.Cleanup(func() { _ = os.Chmod(docsDir, 0o750) })
+
+	doc2 := core.Document{
+		ID:        "owner/repo/new.md",
+		Repo:      "owner/repo",
+		Path:      "new.md",
+		Title:     "New",
+		Content:   "# New",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc2)
+	assert.Error(t, err)
+}
+
+func TestStore_SaveAsset_MkdirFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a file at the place where the assets dir would be created.
+	repoDir := filepath.Join(tmpDir, "owner", "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0o750))
+
+	assetsBlocker := filepath.Join(repoDir, "assets")
+	require.NoError(t, os.WriteFile(assetsBlocker, []byte("blocker"), 0o600))
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/arch.png", []byte("data"))
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to create asset directory")
+}
+
+func TestStore_GetAsset_ReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Save an asset normally.
+	require.NoError(t, store.SaveAsset(t.Context(), "owner/repo", "img.png", []byte("data")))
+
+	// Replace the asset file with a directory so ReadFile fails (but os.IsNotExist is false).
+	assetPath := filepath.Join(tmpDir, "owner", "repo", "assets", "img.png")
+	require.NoError(t, os.Remove(assetPath))
+	require.NoError(t, os.MkdirAll(assetPath, 0o750))
+
+	_, err = store.GetAsset(t.Context(), "owner/repo", "img.png")
+	assert.Error(t, err)
+	assert.False(t, errors.Is(err, ErrNotFound), "expected a read error, not ErrNotFound")
+}
+
+func TestStore_DeleteAsset_RemoveFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create an asset as a non-empty directory so os.Remove fails.
+	assetDir := filepath.Join(tmpDir, "owner", "repo", "assets", "img.png")
+	require.NoError(t, os.MkdirAll(filepath.Join(assetDir, "subfile"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(assetDir, "child"), []byte("x"), 0o600))
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", "img.png")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to delete asset")
+}
+
+func TestStore_ListAssets_WalkError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create an assets subdirectory that is unreadable.
+	repoAssetsDir := filepath.Join(tmpDir, "owner", "repo", "assets")
+	require.NoError(t, os.MkdirAll(repoAssetsDir, 0o750))
+
+	subDir := filepath.Join(repoAssetsDir, "locked")
+	require.NoError(t, os.MkdirAll(subDir, 0o000))
+
+	t.Cleanup(func() { _ = os.Chmod(subDir, 0o750) })
+
+	// Running as root will bypass chmod restrictions; skip in that case.
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod restrictions are bypassed")
+	}
+
+	_, err = store.ListAssets(t.Context(), "owner/repo")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to list assets")
+}
+
+func TestStore_UpdateRepoMeta_WriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a repo directory but make it read-only so the meta write fails.
+	repoDir := filepath.Join(tmpDir, "owner", "ro-repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, "docs"), 0o750))
+	require.NoError(t, os.Chmod(repoDir, 0o555))
+
+	t.Cleanup(func() { _ = os.Chmod(repoDir, 0o750) })
+
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod restrictions are bypassed")
+	}
+
+	doc := core.Document{
+		ID:        "owner/ro-repo/readme.md",
+		Repo:      "owner/ro-repo",
+		Path:      "readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	assert.Error(t, err)
 }

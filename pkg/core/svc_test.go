@@ -39,29 +39,253 @@ func newTestServiceOnly(t *testing.T) *Service {
 	})
 }
 
-func TestIngestDocuments_UpsertSuccess(t *testing.T) {
-	svc, store, search, renderer := newTestService(t)
-	ctx := t.Context()
+func TestIngestDocuments_UpsertAsset(t *testing.T) {
+	svc, store, _, _ := newTestService(t)
 
-	content := "# Hello\nWorld"
-
-	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Hello")
-	renderer.EXPECT().ToPlainText([]byte(content)).Return("Hello World")
-	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
-	search.EXPECT().Index(mock.Anything, mock.Anything, "Hello World").Return(nil)
+	store.EXPECT().SaveAsset(mock.Anything, "owner/repo", "images/arch.png", []byte("png-data")).Return(nil)
 
 	req := IngestRequest{
 		Repo:      "owner/repo",
-		CommitSHA: "abc123",
-		Documents: []IngestDocument{
-			{Path: "docs/hello.md", Content: content, Action: "upsert"},
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/arch.png", Content: "cG5nLWRhdGE=", Action: "upsert"}, // decodes to "png-data"
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.AssetsStored)
+	assert.Equal(t, 0, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_DeleteAsset(t *testing.T) {
+	svc, store, _, _ := newTestService(t)
+
+	store.EXPECT().DeleteAsset(mock.Anything, "owner/repo", "images/old.png").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/old.png", Action: "delete"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.AssetsStored)
+	assert.Equal(t, 1, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_AssetUpsertInvalidBase64(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/bad.png", Content: "not-valid-base64!!!", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "decode base64")
+}
+
+func TestIngestDocuments_SyncDeletesStaleAssets(t *testing.T) {
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	// No stale documents.
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md"},
+	}, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
+
+	// Stale asset should be deleted.
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return([]string{"images/keep.png", "images/stale.png"}, nil)
+	store.EXPECT().SaveAsset(mock.Anything, "owner/repo", "images/keep.png", []byte("data")).Return(nil)
+	store.EXPECT().DeleteAsset(mock.Anything, "owner/repo", "images/stale.png").Return(nil)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+		Assets: &[]IngestAsset{
+			{Path: "images/keep.png", Content: "ZGF0YQ==", Action: "upsert"}, // decodes to "data"
+		},
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
-	assert.Equal(t, 0, resp.Deleted)
+	assert.Equal(t, 1, resp.AssetsStored)
+	assert.Equal(t, 1, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_SyncWithNoAssetsDoesNotDeleteStoredAssets(t *testing.T) {
+	// When a sync request has no assets (nil pointer, e.g. from an older client),
+	// stale-asset cleanup must NOT run and existing stored assets must be preserved.
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md"},
+	}, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
+
+	// ListAssets must NOT be called when Assets is nil.
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+		// Assets intentionally omitted (nil pointer) — simulates an older client.
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_SyncWithEmptyAssetsDeletesAllStoredAssets(t *testing.T) {
+	// When a sync request explicitly sends an empty assets list (non-nil pointer,
+	// length zero), all stored assets for the repo must be deleted.
+	svc, store, search, renderer := newTestService(t)
+	ctx := t.Context()
+
+	content := "# Doc"
+
+	renderer.EXPECT().ExtractTitle([]byte(content)).Return("Doc")
+	renderer.EXPECT().ToPlainText([]byte(content)).Return("Doc")
+	store.EXPECT().Save(mock.Anything, mock.Anything).Return(nil)
+	search.EXPECT().Index(mock.Anything, mock.Anything, "Doc").Return(nil)
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return([]DocumentMeta{
+		{ID: "owner/repo/doc.md", Repo: "owner/repo", Path: "doc.md"},
+	}, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
+
+	// All stored assets should be deleted since the explicit empty list means
+	// "no assets in this publish".
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return([]string{"images/old.png"}, nil)
+	store.EXPECT().DeleteAsset(mock.Anything, "owner/repo", "images/old.png").Return(nil)
+
+	emptyAssets := []IngestAsset{}
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Documents: []IngestDocument{
+			{Path: "doc.md", Content: content, Action: "upsert"},
+		},
+		Assets: &emptyAssets, // explicit empty list from a new client
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.AssetsDeleted)
+}
+
+func TestIngestDocuments_UpsertAssetEmptyPath(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "", Content: "ZGF0YQ==", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "path must not be empty")
+}
+
+func TestIngestDocuments_UpsertAssetEmptyContent(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/arch.png", Content: "", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "content must not be empty")
+}
+
+func TestGetAsset_Success(t *testing.T) {
+	svc, store, _, _ := newTestService(t)
+
+	data := []byte{0x89, 0x50, 0x4E, 0x47}
+	store.EXPECT().GetAsset(mock.Anything, "owner/repo", "images/arch.png").Return(data, nil)
+
+	got, err := svc.GetAsset(t.Context(), "owner/repo", "images/arch.png")
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
+}
+
+func TestGetAsset_Error(t *testing.T) {
+	svc, store, _, _ := newTestService(t)
+
+	store.EXPECT().GetAsset(mock.Anything, "owner/repo", "missing.png").Return(nil, errors.New("not found"))
+
+	_, err := svc.GetAsset(t.Context(), "owner/repo", "missing.png")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "not found")
+}
+
+func TestGetDocument_RewritesImageURLs(t *testing.T) {
+	svc, store, _, renderer := newTestService(t)
+
+	doc := Document{
+		ID:      "owner/repo/docs/guide.md",
+		Repo:    "owner/repo",
+		Path:    "docs/guide.md",
+		Content: "# Guide\n\n![arch](images/arch.png)",
+	}
+
+	store.EXPECT().Get(mock.Anything, "owner/repo", "docs/guide.md").Return(doc, nil)
+	renderer.EXPECT().RenderHTML([]byte(doc.Content)).Return(
+		[]byte(`<h1>Guide</h1><img src="images/arch.png" alt="arch">`),
+		nil, nil,
+	)
+
+	_, html, _, err := svc.GetDocument(t.Context(), "owner/repo", "docs/guide.md")
+	require.NoError(t, err)
+
+	// The relative image URL should be rewritten to the asset route.
+	assert.Contains(t, string(html), `/assets/owner/repo/docs/images/arch.png`)
+	assert.NotContains(t, string(html), `src="images/arch.png"`)
 }
 
 func TestIngestDocuments_UpsertVerifiesDocFields(t *testing.T) {
@@ -93,7 +317,7 @@ func TestIngestDocuments_UpsertVerifiesDocFields(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 }
@@ -121,7 +345,7 @@ func TestIngestDocuments_UpsertEmptyTitleFallsBackToPath(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 }
@@ -141,7 +365,7 @@ func TestIngestDocuments_DeleteSuccess(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resp.Indexed)
 	assert.Equal(t, 1, resp.Deleted)
@@ -170,7 +394,7 @@ func TestIngestDocuments_MixedActions(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 	assert.Equal(t, 1, resp.Deleted)
@@ -188,7 +412,7 @@ func TestIngestDocuments_UnknownActionIsSkipped(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
@@ -204,7 +428,7 @@ func TestIngestDocuments_EmptyDocuments(t *testing.T) {
 		Documents: nil,
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
@@ -249,7 +473,7 @@ func TestIngestDocuments_UpsertErrors(t *testing.T) {
 				},
 			}
 
-			resp, err := svc.IngestDocuments(t.Context(), req)
+			resp, err := svc.IngestDocuments(t.Context(), &req)
 			require.Error(t, err)
 			assert.Nil(t, resp)
 			assert.ErrorContains(t, err, tt.wantErrMsg)
@@ -301,7 +525,7 @@ func TestIngestDocuments_DeleteErrors(t *testing.T) {
 				},
 			}
 
-			resp, err := svc.IngestDocuments(t.Context(), req)
+			resp, err := svc.IngestDocuments(t.Context(), &req)
 			require.Error(t, err)
 			assert.Nil(t, resp)
 			assert.ErrorContains(t, err, tt.wantErrMsg)
@@ -336,6 +560,8 @@ func TestIngestDocuments_SyncDeletesStaleDocuments(t *testing.T) {
 	// Mock ListByRepo for orphan cleanup — no orphans remain after deletion.
 	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/keep.md"}, nil)
 
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
+
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
@@ -345,7 +571,7 @@ func TestIngestDocuments_SyncDeletesStaleDocuments(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 	assert.Equal(t, 1, resp.Deleted)
@@ -371,6 +597,8 @@ func TestIngestDocuments_SyncNoStaleDocuments(t *testing.T) {
 	// No orphans in search index either.
 	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return([]string{"owner/repo/doc.md"}, nil)
 
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
+
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
@@ -380,7 +608,7 @@ func TestIngestDocuments_SyncNoStaleDocuments(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
@@ -408,7 +636,7 @@ func TestIngestDocuments_SyncDisabledDoesNotDelete(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 	assert.Equal(t, 0, resp.Deleted)
@@ -488,7 +716,7 @@ func TestIngestDocuments_SyncErrors(t *testing.T) {
 				Documents: nil,
 			}
 
-			resp, err := svc.IngestDocuments(t.Context(), req)
+			resp, err := svc.IngestDocuments(t.Context(), &req)
 			require.Error(t, err)
 			assert.Nil(t, resp)
 			assert.ErrorContains(t, err, tt.wantErrMsg)
@@ -509,6 +737,8 @@ func TestIngestDocuments_SyncCleansOrphanedSearchEntries(t *testing.T) {
 	// Expect the orphaned entry to be removed from the search index.
 	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(nil)
 
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
+
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
@@ -516,7 +746,7 @@ func TestIngestDocuments_SyncCleansOrphanedSearchEntries(t *testing.T) {
 		Documents: nil,
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resp.Indexed)
 	assert.Equal(t, 1, resp.Deleted)
@@ -546,6 +776,8 @@ func TestIngestDocuments_SyncOrphanCleanupSkipsValidDocs(t *testing.T) {
 	// Only the orphan should be removed.
 	search.EXPECT().Remove(mock.Anything, "owner/repo/orphan.md").Return(nil)
 
+	// Assets is omitted — stale-asset cleanup must NOT run (ListAssets must not be called).
+
 	req := IngestRequest{
 		Repo:      "owner/repo",
 		CommitSHA: "abc",
@@ -555,7 +787,7 @@ func TestIngestDocuments_SyncOrphanCleanupSkipsValidDocs(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 	assert.Equal(t, 1, resp.Deleted) // 1 orphan cleaned
@@ -576,7 +808,7 @@ func TestIngestDocuments_DeleteSearchFailurePreventStoreDelete(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.ErrorContains(t, err, "search unavailable")
@@ -637,7 +869,7 @@ func TestDeleteDocument_CompensatingReindexOnStoreFailure(t *testing.T) {
 				},
 			}
 
-			resp, err := svc.IngestDocuments(t.Context(), req)
+			resp, err := svc.IngestDocuments(t.Context(), &req)
 			require.Error(t, err)
 			assert.Nil(t, resp)
 			// The original delete error is always returned regardless of
@@ -670,7 +902,7 @@ func TestSyncDeleteStale_PartialOrphanCleanupPreservesCount(t *testing.T) {
 		Documents: nil,
 	}
 
-	deleted, err := svc.syncDeleteStale(ctx, req)
+	deleted, err := svc.syncDeleteStale(ctx, &req)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "remove failed")
 	// The one successful orphan removal must be reflected in the count.
@@ -816,7 +1048,7 @@ func TestIngestDocuments_UnknownContentTypeNormalizesToMarkdown(t *testing.T) {
 		},
 	}
 
-	resp, err := svc.IngestDocuments(ctx, req)
+	resp, err := svc.IngestDocuments(ctx, &req)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Indexed)
 }
@@ -1033,6 +1265,169 @@ func TestListRepos(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIngestDocuments_UpsertAssetSaveFailure(t *testing.T) {
+	svc, store, _, _ := newTestService(t)
+
+	store.EXPECT().SaveAsset(mock.Anything, "owner/repo", "images/arch.png", mock.Anything).Return(errors.New("disk full"))
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/arch.png", Content: "cG5nLWRhdGE=", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "disk full")
+	assert.ErrorContains(t, err, "images/arch.png")
+}
+
+func TestIngestDocuments_SyncDeleteStaleAssets_ListError(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(nil, nil)
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return(nil, errors.New("list assets failed"))
+
+	emptyAssets := []IngestAsset{}
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Assets:    &emptyAssets,
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "list assets failed")
+}
+
+func TestIngestDocuments_SyncDeleteStaleAssets_DeleteError(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(nil, nil)
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return([]string{"stale.png"}, nil)
+	store.EXPECT().DeleteAsset(mock.Anything, "owner/repo", "stale.png").Return(errors.New("delete failed"))
+
+	emptyAssets := []IngestAsset{}
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Assets:    &emptyAssets,
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "delete failed")
+	assert.ErrorContains(t, err, "stale.png")
+}
+
+func TestIngestDocuments_UnknownAssetActionIsSkipped(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/arch.png", Content: "cG5nLWRhdGE=", Action: "archive"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.AssetsStored)
+	assert.Equal(t, 0, resp.AssetsDeleted)
+}
+
+func TestResolveAnchor_NoHeadings(t *testing.T) {
+	svc, store, _, renderer := newTestService(t)
+	ctx := t.Context()
+
+	doc := Document{
+		ID:      "owner/repo/doc.md",
+		Repo:    "owner/repo",
+		Path:    "doc.md",
+		Content: "Some content without headings",
+	}
+
+	store.EXPECT().Get(mock.Anything, "owner/repo", "doc.md").Return(doc, nil)
+	renderer.EXPECT().ExtractHeadings([]byte(doc.Content)).Return(nil)
+
+	hit := &SearchResult{
+		ID:               "owner/repo/doc.md",
+		Repo:             "owner/repo",
+		Path:             "doc.md",
+		ContentFragments: []string{"<mark>content</mark> without headings"},
+	}
+
+	anchor, err := svc.resolveAnchor(ctx, hit)
+	require.NoError(t, err)
+	assert.Equal(t, "", anchor)
+}
+
+func TestResolveAnchor_FragmentNotFoundInPlainText(t *testing.T) {
+	svc, store, _, renderer := newTestService(t)
+	ctx := t.Context()
+
+	doc := Document{
+		ID:      "owner/repo/doc.md",
+		Repo:    "owner/repo",
+		Path:    "doc.md",
+		Content: "# Heading\n\nsome content",
+	}
+
+	store.EXPECT().Get(mock.Anything, "owner/repo", "doc.md").Return(doc, nil)
+	renderer.EXPECT().ExtractHeadings([]byte(doc.Content)).Return([]Heading{
+		{ID: "heading", Text: "Heading", Level: 1},
+	})
+	// Plain text does not contain the fragment term at all
+	renderer.EXPECT().ToPlainText([]byte(doc.Content)).Return("Heading\nsome content")
+
+	hit := &SearchResult{
+		ID:               "owner/repo/doc.md",
+		Repo:             "owner/repo",
+		Path:             "doc.md",
+		ContentFragments: []string{"<mark>zzznomatch</mark>"},
+	}
+
+	anchor, err := svc.resolveAnchor(ctx, hit)
+	require.NoError(t, err)
+	assert.Equal(t, "", anchor)
+}
+
+func TestGetProcessor_UnknownTypeFallsBackToMarkdown(t *testing.T) {
+	store := NewMockdocStore(t)
+	search := NewMocksearchEngine(t)
+	mdProcessor := NewMockContentProcessor(t)
+	otherProcessor := NewMockContentProcessor(t)
+
+	svc := New(store, search, map[ContentType]ContentProcessor{
+		ContentTypeMarkdown: mdProcessor,
+		"openapi":           otherProcessor,
+	})
+
+	// An unknown content type should fall back to the markdown processor.
+	got := svc.getProcessor("unknown-type")
+	assert.Equal(t, mdProcessor, got)
+
+	// Empty content type also falls back.
+	got = svc.getProcessor("")
+	assert.Equal(t, mdProcessor, got)
+
+	// Known type returns that processor.
+	got = svc.getProcessor("openapi")
+	assert.Equal(t, otherProcessor, got)
 }
 
 func TestListDocuments(t *testing.T) {

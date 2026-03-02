@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="340" viewBox="0 0 620 340" font-family="sans-serif">
+  <!-- Background -->
+  <rect width="620" height="340" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="310" y="26" text-anchor="middle" font-size="14" fill="#64748b" font-style="italic">Package layers</text>
+
+  <!-- Layer: Entry (cmd) -->
+  <rect x="220" y="40" width="180" height="40" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="310" y="56" text-anchor="middle" font-size="12" font-weight="bold" fill="#4c1d95">cmd/omnidex</text>
+  <text x="310" y="71" text-anchor="middle" font-size="10" fill="#7c3aed">Entrypoint</text>
+
+  <!-- Arrow down -->
+  <line x1="310" y1="80" x2="310" y2="100" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon points="305,100 310,110 315,100" fill="#94a3b8"/>
+
+  <!-- Layer: CLI -->
+  <rect x="220" y="110" width="180" height="40" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="310" y="126" text-anchor="middle" font-size="12" font-weight="bold" fill="#4c1d95">pkg/cmd</text>
+  <text x="310" y="141" text-anchor="middle" font-size="10" fill="#7c3aed">Config, wiring, startup</text>
+
+  <!-- Arrow down -->
+  <line x1="310" y1="150" x2="310" y2="170" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon points="305,170 310,180 315,170" fill="#94a3b8"/>
+
+  <!-- Layer: API -->
+  <rect x="220" y="180" width="180" height="40" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="310" y="196" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">pkg/api</text>
+  <text x="310" y="211" text-anchor="middle" font-size="10" fill="#3b82f6">HTTP handlers, routing</text>
+
+  <!-- Arrow down -->
+  <line x1="310" y1="220" x2="310" y2="240" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon points="305,240 310,250 315,240" fill="#94a3b8"/>
+
+  <!-- Layer: Core -->
+  <rect x="220" y="250" width="180" height="40" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="310" y="266" text-anchor="middle" font-size="12" font-weight="bold" fill="#15803d">pkg/core</text>
+  <text x="310" y="281" text-anchor="middle" font-size="10" fill="#22c55e">Business logic, interfaces</text>
+
+  <!-- Arrow down-left to repo -->
+  <line x1="260" y1="290" x2="130" y2="310" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon points="126,306 125,316 134,311" fill="#94a3b8"/>
+
+  <!-- Arrow down-right to prov -->
+  <line x1="360" y1="290" x2="490" y2="310" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon points="486,306 495,311 484,316" fill="#94a3b8"/>
+
+  <!-- Layer: repo -->
+  <rect x="40" y="312" width="180" height="18" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="130" y="325" text-anchor="middle" font-size="10" font-weight="bold" fill="#92400e">pkg/repo — docstore, search</text>
+
+  <!-- Layer: prov -->
+  <rect x="400" y="312" width="180" height="18" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="490" y="325" text-anchor="middle" font-size="10" font-weight="bold" fill="#92400e">pkg/prov — markdown</text>
+</svg>

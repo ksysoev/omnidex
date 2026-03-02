@@ -67,7 +67,13 @@ type SearchOpts struct {
 }
 
 // IngestRequest represents a batch document ingest request from a GitHub Action.
+//
+// Assets uses a pointer-to-slice so the server can distinguish between an older
+// client that omits the field entirely (nil pointer → skip stale-asset cleanup)
+// and a newer client that explicitly sends an empty list (non-nil pointer with
+// length zero → run cleanup, which will delete all stored assets for the repo).
 type IngestRequest struct {
+	Assets    *[]IngestAsset   `json:"assets,omitempty"`
 	Repo      string           `json:"repo"`
 	CommitSHA string           `json:"commit_sha"`
 	Documents []IngestDocument `json:"documents"`
@@ -82,10 +88,20 @@ type IngestDocument struct {
 	ContentType ContentType `json:"content_type,omitempty"` // defaults to "markdown" when empty
 }
 
+// IngestAsset represents a binary asset (image, diagram, etc.) in an ingest request.
+// Content is base64-encoded to allow transport within JSON payloads.
+type IngestAsset struct {
+	Path    string `json:"path"`    // relative path from docs root (e.g., "images/arch.png")
+	Content string `json:"content"` // base64-encoded binary content
+	Action  string `json:"action"`  // "upsert" or "delete"
+}
+
 // IngestResponse is returned after processing an ingest request.
 type IngestResponse struct {
-	Indexed int `json:"indexed"`
-	Deleted int `json:"deleted"`
+	Indexed       int `json:"indexed"`
+	Deleted       int `json:"deleted"`
+	AssetsStored  int `json:"assets_stored,omitempty"`
+	AssetsDeleted int `json:"assets_deleted,omitempty"`
 }
 
 // Heading represents a heading extracted from a document for table of contents navigation.

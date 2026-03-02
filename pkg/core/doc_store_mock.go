@@ -71,6 +71,54 @@ func (_c *MockdocStore_Delete_Call) RunAndReturn(run func(context.Context, strin
 	return _c
 }
 
+// DeleteAsset provides a mock function with given fields: ctx, repo, path
+func (_m *MockdocStore) DeleteAsset(ctx context.Context, repo string, path string) error {
+	ret := _m.Called(ctx, repo, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAsset")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, repo, path)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockdocStore_DeleteAsset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAsset'
+type MockdocStore_DeleteAsset_Call struct {
+	*mock.Call
+}
+
+// DeleteAsset is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+//   - path string
+func (_e *MockdocStore_Expecter) DeleteAsset(ctx interface{}, repo interface{}, path interface{}) *MockdocStore_DeleteAsset_Call {
+	return &MockdocStore_DeleteAsset_Call{Call: _e.mock.On("DeleteAsset", ctx, repo, path)}
+}
+
+func (_c *MockdocStore_DeleteAsset_Call) Run(run func(ctx context.Context, repo string, path string)) *MockdocStore_DeleteAsset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockdocStore_DeleteAsset_Call) Return(_a0 error) *MockdocStore_DeleteAsset_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockdocStore_DeleteAsset_Call) RunAndReturn(run func(context.Context, string, string) error) *MockdocStore_DeleteAsset_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Get provides a mock function with given fields: ctx, repo, path
 func (_m *MockdocStore) Get(ctx context.Context, repo string, path string) (Document, error) {
 	ret := _m.Called(ctx, repo, path)
@@ -125,6 +173,66 @@ func (_c *MockdocStore_Get_Call) Return(_a0 Document, _a1 error) *MockdocStore_G
 }
 
 func (_c *MockdocStore_Get_Call) RunAndReturn(run func(context.Context, string, string) (Document, error)) *MockdocStore_Get_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetAsset provides a mock function with given fields: ctx, repo, path
+func (_m *MockdocStore) GetAsset(ctx context.Context, repo string, path string) ([]byte, error) {
+	ret := _m.Called(ctx, repo, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAsset")
+	}
+
+	var r0 []byte
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) ([]byte, error)); ok {
+		return rf(ctx, repo, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) []byte); ok {
+		r0 = rf(ctx, repo, path)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, repo, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockdocStore_GetAsset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAsset'
+type MockdocStore_GetAsset_Call struct {
+	*mock.Call
+}
+
+// GetAsset is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+//   - path string
+func (_e *MockdocStore_Expecter) GetAsset(ctx interface{}, repo interface{}, path interface{}) *MockdocStore_GetAsset_Call {
+	return &MockdocStore_GetAsset_Call{Call: _e.mock.On("GetAsset", ctx, repo, path)}
+}
+
+func (_c *MockdocStore_GetAsset_Call) Run(run func(ctx context.Context, repo string, path string)) *MockdocStore_GetAsset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockdocStore_GetAsset_Call) Return(_a0 []byte, _a1 error) *MockdocStore_GetAsset_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockdocStore_GetAsset_Call) RunAndReturn(run func(context.Context, string, string) ([]byte, error)) *MockdocStore_GetAsset_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -184,6 +292,65 @@ func (_c *MockdocStore_List_Call) Return(_a0 []DocumentMeta, _a1 error) *Mockdoc
 }
 
 func (_c *MockdocStore_List_Call) RunAndReturn(run func(context.Context, string) ([]DocumentMeta, error)) *MockdocStore_List_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListAssets provides a mock function with given fields: ctx, repo
+func (_m *MockdocStore) ListAssets(ctx context.Context, repo string) ([]string, error) {
+	ret := _m.Called(ctx, repo)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAssets")
+	}
+
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return rf(ctx, repo)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []string); ok {
+		r0 = rf(ctx, repo)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, repo)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockdocStore_ListAssets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAssets'
+type MockdocStore_ListAssets_Call struct {
+	*mock.Call
+}
+
+// ListAssets is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+func (_e *MockdocStore_Expecter) ListAssets(ctx interface{}, repo interface{}) *MockdocStore_ListAssets_Call {
+	return &MockdocStore_ListAssets_Call{Call: _e.mock.On("ListAssets", ctx, repo)}
+}
+
+func (_c *MockdocStore_ListAssets_Call) Run(run func(ctx context.Context, repo string)) *MockdocStore_ListAssets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockdocStore_ListAssets_Call) Return(_a0 []string, _a1 error) *MockdocStore_ListAssets_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockdocStore_ListAssets_Call) RunAndReturn(run func(context.Context, string) ([]string, error)) *MockdocStore_ListAssets_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -289,6 +456,55 @@ func (_c *MockdocStore_Save_Call) Return(_a0 error) *MockdocStore_Save_Call {
 }
 
 func (_c *MockdocStore_Save_Call) RunAndReturn(run func(context.Context, Document) error) *MockdocStore_Save_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveAsset provides a mock function with given fields: ctx, repo, path, data
+func (_m *MockdocStore) SaveAsset(ctx context.Context, repo string, path string, data []byte) error {
+	ret := _m.Called(ctx, repo, path, data)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveAsset")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, []byte) error); ok {
+		r0 = rf(ctx, repo, path, data)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockdocStore_SaveAsset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveAsset'
+type MockdocStore_SaveAsset_Call struct {
+	*mock.Call
+}
+
+// SaveAsset is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+//   - path string
+//   - data []byte
+func (_e *MockdocStore_Expecter) SaveAsset(ctx interface{}, repo interface{}, path interface{}, data interface{}) *MockdocStore_SaveAsset_Call {
+	return &MockdocStore_SaveAsset_Call{Call: _e.mock.On("SaveAsset", ctx, repo, path, data)}
+}
+
+func (_c *MockdocStore_SaveAsset_Call) Run(run func(ctx context.Context, repo string, path string, data []byte)) *MockdocStore_SaveAsset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockdocStore_SaveAsset_Call) Return(_a0 error) *MockdocStore_SaveAsset_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockdocStore_SaveAsset_Call) RunAndReturn(run func(context.Context, string, string, []byte) error) *MockdocStore_SaveAsset_Call {
 	_c.Call.Return(run)
 	return _c
 }

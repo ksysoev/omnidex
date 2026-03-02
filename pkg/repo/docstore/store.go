@@ -19,10 +19,11 @@ import (
 const (
 	metaFileName = "meta.json"
 	docsDir      = "docs"
+	assetsDir    = "assets"
 )
 
-// ErrNotFound is returned when a requested document does not exist.
-var ErrNotFound = errors.New("document not found")
+// ErrNotFound is returned when a requested document or asset does not exist.
+var ErrNotFound = errors.New("not found")
 
 // ErrInvalidPath is returned when a document path attempts directory traversal.
 var ErrInvalidPath = errors.New("invalid path: directory traversal not allowed")
@@ -387,4 +388,159 @@ func (s *Store) cleanEmptyDirs(dir, stopAt string) {
 		_ = os.Remove(dir)
 		dir = filepath.Dir(dir)
 	}
+}
+
+// validateAssetRelPath rejects asset path values that could escape the assets
+// subdirectory. validatePath (which checks containment within basePath) is
+// insufficient on its own because a path like "../docs/readme.md" still resolves
+// to a location under basePath, allowing the asset API to access doc files.
+//
+// Rules enforced here (before the absolute-path check in validatePath):
+//   - path must not be empty or "."
+//   - path must not be absolute
+//   - cleaned path must not equal ".." or start with "../" (OS-separator aware)
+func validateAssetRelPath(assetPath string) error {
+	if assetPath == "" {
+		return fmt.Errorf("%w: asset path must not be empty", ErrInvalidPath)
+	}
+
+	if filepath.IsAbs(assetPath) {
+		return fmt.Errorf("%w: asset path must not be absolute", ErrInvalidPath)
+	}
+
+	clean := filepath.Clean(assetPath)
+
+	if clean == "." || clean == ".." {
+		return fmt.Errorf("%w: asset path resolves to directory root", ErrInvalidPath)
+	}
+
+	if strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("%w: asset path attempts directory traversal", ErrInvalidPath)
+	}
+
+	return nil
+}
+
+// SaveAsset writes a binary asset to {basePath}/{repo}/assets/{path}.
+// No metadata sidecar is created; MIME type is detected from the file extension at serve time.
+func (s *Store) SaveAsset(_ context.Context, repo, path string, data []byte) error {
+	if err := validateAssetRelPath(path); err != nil {
+		return err
+	}
+
+	if err := s.validatePath(repo, assetsDir, path); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	assetDir := filepath.Join(s.basePath, repo, assetsDir, filepath.Dir(path))
+
+	if err := os.MkdirAll(assetDir, 0o750); err != nil {
+		return fmt.Errorf("failed to create asset directory: %w", err)
+	}
+
+	assetPath := filepath.Join(s.basePath, repo, assetsDir, path)
+
+	if err := os.WriteFile(assetPath, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write asset: %w", err)
+	}
+
+	return nil
+}
+
+// GetAsset reads a binary asset from the store by its repository and path.
+func (s *Store) GetAsset(_ context.Context, repo, path string) ([]byte, error) {
+	if err := validateAssetRelPath(path); err != nil {
+		return nil, err
+	}
+
+	if err := s.validatePath(repo, assetsDir, path); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	assetPath := filepath.Join(s.basePath, repo, assetsDir, path)
+
+	data, err := os.ReadFile(assetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: asset %s/%s", ErrNotFound, repo, path)
+		}
+
+		return nil, fmt.Errorf("failed to read asset: %w", err)
+	}
+
+	return data, nil
+}
+
+// DeleteAsset removes a binary asset from the store and cleans up empty parent directories.
+func (s *Store) DeleteAsset(_ context.Context, repo, path string) error {
+	if err := validateAssetRelPath(path); err != nil {
+		return err
+	}
+
+	if err := s.validatePath(repo, assetsDir, path); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	assetPath := filepath.Join(s.basePath, repo, assetsDir, path)
+
+	if err := os.Remove(assetPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete asset: %w", err)
+	}
+
+	s.cleanEmptyDirs(filepath.Dir(assetPath), filepath.Join(s.basePath, repo, assetsDir))
+
+	return nil
+}
+
+// ListAssets returns all asset paths for a repository.
+func (s *Store) ListAssets(_ context.Context, repo string) ([]string, error) {
+	if err := s.validatePath(repo); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	repoAssetsDir := filepath.Join(s.basePath, repo, assetsDir)
+
+	var paths []string
+
+	err := filepath.Walk(repoAssetsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(repoAssetsDir, path)
+		if err != nil {
+			return fmt.Errorf("failed to compute relative path: %w", err)
+		}
+
+		paths = append(paths, filepath.ToSlash(relPath))
+
+		return nil
+	})
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("failed to list assets: %w", err)
+	}
+
+	sort.Strings(paths)
+
+	return paths, nil
 }

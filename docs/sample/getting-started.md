@@ -8,6 +8,8 @@ Omnidex is a centralized documentation portal that aggregates and serves markdow
 2. **Search** across all indexed documentation using the built-in full-text search engine
 3. **Browse** documentation through the web portal with navigation and syntax highlighting
 
+![How Omnidex works](images/how-it-works.svg)
+
 ## Quick Start with Docker
 
 The fastest way to get Omnidex running locally:

@@ -4,6 +4,9 @@ api:
   listen: :8080
   api_keys:
     - changeme
+  # Maximum ingest request body size in MiB. Increase if publishing repos with
+  # many or large images. Override via API_MAX_INGEST_BODY_MIB env var.
+  # max_ingest_body_mib: 50
 
 storage:
   path: ./data/repos

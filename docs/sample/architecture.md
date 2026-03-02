@@ -36,6 +36,8 @@ graph TD
 | **views** | `pkg/views/` | HTML template rendering for the portal |
 | **action** | `action/` | GitHub Action for publishing docs |
 
+![Package layers](images/package-layers.svg)
+
 ## Request Flows
 
 ### Document Ingestion
