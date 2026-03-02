@@ -155,3 +155,30 @@ func TestAssetPage_InvalidPath(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
+
+func TestAssetPage_ContentTypeDetectedFromData(t *testing.T) {
+	svc := NewMockService(t)
+	views := NewMockViewRenderer(t)
+
+	api := &API{
+		svc:    svc,
+		views:  views,
+		config: Config{APIKeys: []string{"test-key"}},
+	}
+
+	mux := api.newMux()
+
+	// A .bin file has no MIME type registered for its extension, so the handler
+	// falls back to http.DetectContentType to sniff the data.
+	binaryData := []byte{0x00, 0x01, 0x02, 0x03}
+	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "data.bin").Return(binaryData, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/owner/repo/data.bin", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	// Content-Type must be set (sniffed from the data, not from the extension).
+	assert.NotEmpty(t, rec.Header().Get("Content-Type"))
+}

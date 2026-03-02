@@ -573,3 +573,24 @@ func TestBuildIngestRequest_AssetsSorted(t *testing.T) {
 	assert.Equal(t, "images/b.png", (*req.Assets)[1].Path)
 	assert.Equal(t, "images/c.png", (*req.Assets)[2].Path)
 }
+
+func TestCollectFiles_InvalidGlobPattern(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Hello"), 0o600))
+
+	// An unmatched bracket is an invalid doublestar glob pattern.
+	files, err := CollectFiles(dir, "[invalid")
+	assert.Error(t, err)
+	assert.Nil(t, files)
+	assert.ErrorContains(t, err, "invalid glob pattern")
+}
+
+func TestPublish_CollectFilesError(t *testing.T) {
+	pub := New("http://localhost", "key")
+
+	// Pass a path that does not exist — CollectFiles will fail to stat it.
+	resp, err := pub.Publish(t.Context(), "/nonexistent/path/xyz", "**/*.md", "owner/repo", "", true)
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "failed to collect files")
+}

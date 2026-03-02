@@ -138,6 +138,14 @@ func TestRewriteImageURLs(t *testing.T) {
 	}
 }
 
+func TestRewriteImageURLs_MalformedSegment(t *testing.T) {
+	// An invalid percent-escape sequence (%zz) in the src causes url.JoinPath
+	// to return an error. The function must leave the original match unchanged.
+	html := `<img src="img%zz.png" alt="bad">`
+	got := RewriteImageURLs([]byte(html), "owner/repo", "docs/guide.md")
+	assert.Equal(t, html, string(got))
+}
+
 func TestIsAbsoluteURL(t *testing.T) {
 	tests := []struct {
 		name string

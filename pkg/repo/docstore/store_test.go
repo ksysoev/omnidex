@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -659,4 +660,187 @@ func TestStore_SaveAssetOverwrite(t *testing.T) {
 	got, err := store.GetAsset(t.Context(), "owner/repo", "img.png")
 	require.NoError(t, err)
 	assert.Equal(t, []byte("version2"), got)
+}
+
+func TestNew_MkdirAllFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	// Create a file where a directory would need to be created.
+	tmpDir := t.TempDir()
+	blocker := filepath.Join(tmpDir, "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
+
+	// Try to create a store rooted inside the file — MkdirAll must fail.
+	_, err := New(filepath.Join(blocker, "subdir"))
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to create storage directory")
+}
+
+func TestStore_Save_WriteContentFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// First save a doc to create the repo structure.
+	doc := core.Document{
+		ID:        "owner/repo/readme.md",
+		Repo:      "owner/repo",
+		Path:      "readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	require.NoError(t, err)
+
+	// Make the docs directory read-only so the next write fails.
+	docsDir := filepath.Join(tmpDir, "owner", "repo", "docs")
+	require.NoError(t, os.Chmod(docsDir, 0o555))
+
+	t.Cleanup(func() { _ = os.Chmod(docsDir, 0o750) })
+
+	doc2 := core.Document{
+		ID:        "owner/repo/new.md",
+		Repo:      "owner/repo",
+		Path:      "new.md",
+		Title:     "New",
+		Content:   "# New",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc2)
+	assert.Error(t, err)
+}
+
+func TestStore_SaveAsset_MkdirFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a file at the place where the assets dir would be created.
+	repoDir := filepath.Join(tmpDir, "owner", "repo")
+	require.NoError(t, os.MkdirAll(repoDir, 0o750))
+
+	assetsBlocker := filepath.Join(repoDir, "assets")
+	require.NoError(t, os.WriteFile(assetsBlocker, []byte("blocker"), 0o600))
+
+	err = store.SaveAsset(t.Context(), "owner/repo", "images/arch.png", []byte("data"))
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to create asset directory")
+}
+
+func TestStore_GetAsset_ReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Save an asset normally.
+	require.NoError(t, store.SaveAsset(t.Context(), "owner/repo", "img.png", []byte("data")))
+
+	// Replace the asset file with a directory so ReadFile fails (but os.IsNotExist is false).
+	assetPath := filepath.Join(tmpDir, "owner", "repo", "assets", "img.png")
+	require.NoError(t, os.Remove(assetPath))
+	require.NoError(t, os.MkdirAll(assetPath, 0o750))
+
+	_, err = store.GetAsset(t.Context(), "owner/repo", "img.png")
+	assert.Error(t, err)
+	assert.False(t, errors.Is(err, ErrNotFound), "expected a read error, not ErrNotFound")
+}
+
+func TestStore_DeleteAsset_RemoveFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create an asset as a non-empty directory so os.Remove fails.
+	assetDir := filepath.Join(tmpDir, "owner", "repo", "assets", "img.png")
+	require.NoError(t, os.MkdirAll(filepath.Join(assetDir, "subfile"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(assetDir, "child"), []byte("x"), 0o600))
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", "img.png")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to delete asset")
+}
+
+func TestStore_ListAssets_WalkError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create an assets subdirectory that is unreadable.
+	repoAssetsDir := filepath.Join(tmpDir, "owner", "repo", "assets")
+	require.NoError(t, os.MkdirAll(repoAssetsDir, 0o750))
+
+	subDir := filepath.Join(repoAssetsDir, "locked")
+	require.NoError(t, os.MkdirAll(subDir, 0o000))
+
+	t.Cleanup(func() { _ = os.Chmod(subDir, 0o750) })
+
+	// Running as root will bypass chmod restrictions; skip in that case.
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod restrictions are bypassed")
+	}
+
+	_, err = store.ListAssets(t.Context(), "owner/repo")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "failed to list assets")
+}
+
+func TestStore_UpdateRepoMeta_WriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// Create a repo directory but make it read-only so the meta write fails.
+	repoDir := filepath.Join(tmpDir, "owner", "ro-repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, "docs"), 0o750))
+	require.NoError(t, os.Chmod(repoDir, 0o555))
+
+	t.Cleanup(func() { _ = os.Chmod(repoDir, 0o750) })
+
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod restrictions are bypassed")
+	}
+
+	doc := core.Document{
+		ID:        "owner/ro-repo/readme.md",
+		Repo:      "owner/ro-repo",
+		Path:      "readme.md",
+		Title:     "README",
+		Content:   "# README",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+
+	err = store.Save(t.Context(), doc)
+	assert.Error(t, err)
 }

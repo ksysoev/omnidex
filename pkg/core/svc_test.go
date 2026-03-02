@@ -1267,6 +1267,169 @@ func TestListRepos(t *testing.T) {
 	}
 }
 
+func TestIngestDocuments_UpsertAssetSaveFailure(t *testing.T) {
+	svc, store, _, _ := newTestService(t)
+
+	store.EXPECT().SaveAsset(mock.Anything, "owner/repo", "images/arch.png", mock.Anything).Return(errors.New("disk full"))
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/arch.png", Content: "cG5nLWRhdGE=", Action: "upsert"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "disk full")
+	assert.ErrorContains(t, err, "images/arch.png")
+}
+
+func TestIngestDocuments_SyncDeleteStaleAssets_ListError(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(nil, nil)
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return(nil, errors.New("list assets failed"))
+
+	emptyAssets := []IngestAsset{}
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Assets:    &emptyAssets,
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "list assets failed")
+}
+
+func TestIngestDocuments_SyncDeleteStaleAssets_DeleteError(t *testing.T) {
+	svc, store, search, _ := newTestService(t)
+	ctx := t.Context()
+
+	store.EXPECT().List(mock.Anything, "owner/repo").Return(nil, nil)
+	search.EXPECT().ListByRepo(mock.Anything, "owner/repo").Return(nil, nil)
+	store.EXPECT().ListAssets(mock.Anything, "owner/repo").Return([]string{"stale.png"}, nil)
+	store.EXPECT().DeleteAsset(mock.Anything, "owner/repo", "stale.png").Return(errors.New("delete failed"))
+
+	emptyAssets := []IngestAsset{}
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Sync:      true,
+		Assets:    &emptyAssets,
+	}
+
+	resp, err := svc.IngestDocuments(ctx, &req)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorContains(t, err, "delete failed")
+	assert.ErrorContains(t, err, "stale.png")
+}
+
+func TestIngestDocuments_UnknownAssetActionIsSkipped(t *testing.T) {
+	svc := newTestServiceOnly(t)
+
+	req := IngestRequest{
+		Repo:      "owner/repo",
+		CommitSHA: "abc",
+		Assets: &[]IngestAsset{
+			{Path: "images/arch.png", Content: "cG5nLWRhdGE=", Action: "archive"},
+		},
+	}
+
+	resp, err := svc.IngestDocuments(t.Context(), &req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resp.AssetsStored)
+	assert.Equal(t, 0, resp.AssetsDeleted)
+}
+
+func TestResolveAnchor_NoHeadings(t *testing.T) {
+	svc, store, _, renderer := newTestService(t)
+	ctx := t.Context()
+
+	doc := Document{
+		ID:      "owner/repo/doc.md",
+		Repo:    "owner/repo",
+		Path:    "doc.md",
+		Content: "Some content without headings",
+	}
+
+	store.EXPECT().Get(mock.Anything, "owner/repo", "doc.md").Return(doc, nil)
+	renderer.EXPECT().ExtractHeadings([]byte(doc.Content)).Return(nil)
+
+	hit := &SearchResult{
+		ID:               "owner/repo/doc.md",
+		Repo:             "owner/repo",
+		Path:             "doc.md",
+		ContentFragments: []string{"<mark>content</mark> without headings"},
+	}
+
+	anchor, err := svc.resolveAnchor(ctx, hit)
+	require.NoError(t, err)
+	assert.Equal(t, "", anchor)
+}
+
+func TestResolveAnchor_FragmentNotFoundInPlainText(t *testing.T) {
+	svc, store, _, renderer := newTestService(t)
+	ctx := t.Context()
+
+	doc := Document{
+		ID:      "owner/repo/doc.md",
+		Repo:    "owner/repo",
+		Path:    "doc.md",
+		Content: "# Heading\n\nsome content",
+	}
+
+	store.EXPECT().Get(mock.Anything, "owner/repo", "doc.md").Return(doc, nil)
+	renderer.EXPECT().ExtractHeadings([]byte(doc.Content)).Return([]Heading{
+		{ID: "heading", Text: "Heading", Level: 1},
+	})
+	// Plain text does not contain the fragment term at all
+	renderer.EXPECT().ToPlainText([]byte(doc.Content)).Return("Heading\nsome content")
+
+	hit := &SearchResult{
+		ID:               "owner/repo/doc.md",
+		Repo:             "owner/repo",
+		Path:             "doc.md",
+		ContentFragments: []string{"<mark>zzznomatch</mark>"},
+	}
+
+	anchor, err := svc.resolveAnchor(ctx, hit)
+	require.NoError(t, err)
+	assert.Equal(t, "", anchor)
+}
+
+func TestGetProcessor_UnknownTypeFallsBackToMarkdown(t *testing.T) {
+	store := NewMockdocStore(t)
+	search := NewMocksearchEngine(t)
+	mdProcessor := NewMockContentProcessor(t)
+	otherProcessor := NewMockContentProcessor(t)
+
+	svc := New(store, search, map[ContentType]ContentProcessor{
+		ContentTypeMarkdown: mdProcessor,
+		"openapi":           otherProcessor,
+	})
+
+	// An unknown content type should fall back to the markdown processor.
+	got := svc.getProcessor("unknown-type")
+	assert.Equal(t, mdProcessor, got)
+
+	// Empty content type also falls back.
+	got = svc.getProcessor("")
+	assert.Equal(t, mdProcessor, got)
+
+	// Known type returns that processor.
+	got = svc.getProcessor("openapi")
+	assert.Equal(t, otherProcessor, got)
+}
+
 func TestListDocuments(t *testing.T) {
 	now := time.Date(2025, 3, 10, 8, 30, 0, 0, time.UTC)
 
