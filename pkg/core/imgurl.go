@@ -32,6 +32,13 @@ func RewriteImageURLs(html []byte, repo, docPath string) []byte {
 			return match
 		}
 
+		// Reject malformed percent-escape sequences before any further processing.
+		// url.JoinPath behaviour on invalid escapes differs across Go versions and
+		// platforms, so we validate up front to guarantee consistent behaviour.
+		if _, err := url.PathUnescape(src); err != nil {
+			return match
+		}
+
 		// Resolve relative path against the document's directory.
 		resolved := path.Clean(path.Join(docDir, src))
 
