@@ -646,6 +646,41 @@ func TestStore_AssetPathTraversal(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidPath)
 }
 
+// TestStore_AssetPathEscapesAssetsDir verifies that a path like "../docs/readme.md"
+// is rejected even though it resolves to a location still inside basePath.
+// Without the validateAssetRelPath guard, validatePath alone would allow this,
+// letting the asset API read/write/delete doc files.
+func TestStore_AssetPathEscapesAssetsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := New(tmpDir)
+	require.NoError(t, err)
+
+	// First, create a real doc so the target path actually exists on disk.
+	doc := core.Document{
+		ID:        "owner/repo/secret.md",
+		Repo:      "owner/repo",
+		Path:      "secret.md",
+		Title:     "Secret",
+		Content:   "top secret",
+		CommitSHA: "abc",
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.Save(t.Context(), doc))
+
+	// "../docs/secret.md" resolves to {basePath}/owner/repo/docs/secret.md —
+	// still under basePath but outside the assets/ subdirectory.
+	escapingPath := "../docs/secret.md"
+
+	err = store.SaveAsset(t.Context(), "owner/repo", escapingPath, []byte("overwrite"))
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	_, err = store.GetAsset(t.Context(), "owner/repo", escapingPath)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+
+	err = store.DeleteAsset(t.Context(), "owner/repo", escapingPath)
+	assert.ErrorIs(t, err, ErrInvalidPath)
+}
+
 func TestStore_SaveAssetOverwrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := New(tmpDir)

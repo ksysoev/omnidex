@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -10,9 +11,25 @@ import (
 
 // ingestDocs handles POST /api/v1/docs - batch document ingest from GitHub Actions.
 func (a *API) ingestDocs(w http.ResponseWriter, r *http.Request) {
+	// Limit the request body to prevent OOM from excessively large asset payloads.
+	// Fall back to the default when the config field is zero (e.g. in unit tests that
+	// construct API directly without going through New).
+	maxBytes := a.config.MaxIngestBodyMiB
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxIngestBodyMiB
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes*mib)
+
 	var req core.IngestRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
 		slog.ErrorContext(r.Context(), "Failed to decode ingest request", "error", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 

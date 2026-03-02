@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	defaultTimeout  = 5 * time.Second
-	shutdownTimeout = 10 * time.Second
+	defaultTimeout          = 5 * time.Second
+	shutdownTimeout         = 10 * time.Second
+	defaultMaxIngestBodyMiB = 50
+	mib                     = 1024 * 1024
 )
 
 // API is the main HTTP server that serves both the ingest API and the documentation portal.
@@ -26,8 +28,9 @@ type API struct {
 
 // Config holds the configuration for the API server.
 type Config struct {
-	Listen  string   `mapstructure:"listen"`
-	APIKeys []string `mapstructure:"api_keys"` //nolint:gosec // This is a config struct, not a secret value
+	Listen           string   `mapstructure:"listen"`
+	APIKeys          []string `mapstructure:"api_keys"`            //nolint:gosec // This is a config struct, not a secret value
+	MaxIngestBodyMiB int64    `mapstructure:"max_ingest_body_mib"` // Maximum ingest request body in MiB (default 50).
 }
 
 // Service defines the interface for core business logic operations.
@@ -54,6 +57,10 @@ type ViewRenderer interface {
 func New(cfg Config, svc Service, views ViewRenderer) (*API, error) {
 	if cfg.Listen == "" {
 		return nil, fmt.Errorf("listen address must be specified")
+	}
+
+	if cfg.MaxIngestBodyMiB <= 0 {
+		cfg.MaxIngestBodyMiB = defaultMaxIngestBodyMiB
 	}
 
 	api := &API{

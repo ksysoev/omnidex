@@ -1,5 +1,3 @@
-//go:build !compile
-
 package core
 
 import (
@@ -101,11 +99,32 @@ func TestRewriteImageURLs(t *testing.T) {
 			want:    `<img src="/assets/owner/repo/docs/my%20image.png" alt="spaced">`,
 		},
 		{
-			name:    "percent-encodes hash in path",
-			html:    `<img src="img#1.png" alt="hash">`,
+			name:    "preserves fragment from src",
+			html:    `<img src="sprite.svg#icon" alt="icon">`,
 			repo:    "owner/repo",
 			docPath: "docs/guide.md",
-			want:    `<img src="/assets/owner/repo/docs/img%231.png" alt="hash">`,
+			want:    `<img src="/assets/owner/repo/docs/sprite.svg#icon" alt="icon">`,
+		},
+		{
+			name:    "preserves query string from src",
+			html:    `<img src="img.png?raw=1" alt="raw">`,
+			repo:    "owner/repo",
+			docPath: "docs/guide.md",
+			want:    `<img src="/assets/owner/repo/docs/img.png?raw=1" alt="raw">`,
+		},
+		{
+			name:    "preserves both query string and fragment from src",
+			html:    `<img src="img.png?v=2#section" alt="both">`,
+			repo:    "owner/repo",
+			docPath: "docs/guide.md",
+			want:    `<img src="/assets/owner/repo/docs/img.png?v=2#section" alt="both">`,
+		},
+		{
+			name:    "does not double-encode already-encoded path",
+			html:    `<img src="my%20img.png" alt="encoded">`,
+			repo:    "owner/repo",
+			docPath: "docs/guide.md",
+			want:    `<img src="/assets/owner/repo/docs/my%20img.png" alt="encoded">`,
 		},
 		{
 			name:    "rewrites multiple images",
@@ -139,7 +158,7 @@ func TestRewriteImageURLs(t *testing.T) {
 }
 
 func TestRewriteImageURLs_MalformedSegment(t *testing.T) {
-	// An invalid percent-escape sequence (%zz) in the src causes url.JoinPath
+	// An invalid percent-escape sequence (%zz) in the src causes url.Parse
 	// to return an error. The function must leave the original match unchanged.
 	html := `<img src="img%zz.png" alt="bad">`
 	got := RewriteImageURLs([]byte(html), "owner/repo", "docs/guide.md")

@@ -17,6 +17,10 @@ var imgSrcRe = regexp.MustCompile(`(<img\s[^>]*?src=")([^"]+)(")`)
 // point to the asset serving route (/assets/{repo}/{resolvedPath}).
 // Absolute URLs (http, https, //, data:) and already-absolute paths
 // (starting with /) are left unchanged.
+//
+// The query string and fragment of the original src are preserved: only the
+// path component is rewritten so that references like "sprite.svg#icon" or
+// "img.png?raw=1" keep their semantics after rewriting.
 func RewriteImageURLs(html []byte, repo, docPath string) []byte {
 	docDir := path.Dir(docPath)
 
@@ -32,31 +36,43 @@ func RewriteImageURLs(html []byte, repo, docPath string) []byte {
 			return match
 		}
 
-		// Reject malformed percent-escape sequences before any further processing.
-		// url.JoinPath behaviour on invalid escapes differs across Go versions and
-		// platforms, so we validate up front to guarantee consistent behaviour.
-		if _, err := url.PathUnescape(src); err != nil {
+		// Parse the src so we can rewrite only its path while preserving any
+		// original query string or fragment. url.Parse also validates
+		// percent-escape sequences, so malformed escapes are caught here.
+		u, err := url.Parse(src)
+		if err != nil {
 			return match
 		}
 
-		// Resolve relative path against the document's directory.
-		resolved := path.Clean(path.Join(docDir, src))
+		// Resolve the path component against the document's directory.
+		resolvedPath := path.Clean(path.Join(docDir, u.Path))
 
 		// Prevent directory traversal outside the repo root.
 		// Use == ".." or HasPrefix("../") to avoid false-positives on paths like
 		// "..images/logo.png" that start with ".." but don't escape the root.
-		if resolved == ".." || strings.HasPrefix(resolved, "../") {
+		if resolvedPath == ".." || strings.HasPrefix(resolvedPath, "../") {
 			return match
 		}
 
-		// Build the rewritten src, percent-encoding each path segment so that
-		// paths containing spaces, '#', '?', etc. produce valid, unambiguous URLs.
-		// url.JoinPath encodes each segment individually and never double-encodes
-		// slashes that are part of the path structure.
-		newSrc, err := url.JoinPath("/assets/", repo, resolved)
+		// Build the rewritten path, percent-encoding each path segment so that
+		// names containing spaces produce valid, unambiguous URLs.
+		// url.JoinPath encodes each segment individually and preserves slashes.
+		newPath, err := url.JoinPath("/assets/", repo, resolvedPath)
 		if err != nil {
 			// Malformed segments — leave the original src unchanged.
 			return match
+		}
+
+		// Re-attach the original query string and fragment (if any) so that
+		// references like "sprite.svg#icon" or "img.png?raw=1" keep their
+		// semantics and are not double-encoded.
+		newSrc := newPath
+		if u.RawQuery != "" {
+			newSrc += "?" + u.RawQuery
+		}
+
+		if u.Fragment != "" {
+			newSrc += "#" + u.Fragment
 		}
 
 		buf := make([]byte, 0, len(submatch[1])+len(newSrc)+len(submatch[3]))

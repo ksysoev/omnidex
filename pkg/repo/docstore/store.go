@@ -390,9 +390,44 @@ func (s *Store) cleanEmptyDirs(dir, stopAt string) {
 	}
 }
 
+// validateAssetRelPath rejects asset path values that could escape the assets
+// subdirectory. validatePath (which checks containment within basePath) is
+// insufficient on its own because a path like "../docs/readme.md" still resolves
+// to a location under basePath, allowing the asset API to access doc files.
+//
+// Rules enforced here (before the absolute-path check in validatePath):
+//   - path must not be empty or "."
+//   - path must not be absolute
+//   - cleaned path must not equal ".." or start with "../" (OS-separator aware)
+func validateAssetRelPath(assetPath string) error {
+	if assetPath == "" {
+		return fmt.Errorf("%w: asset path must not be empty", ErrInvalidPath)
+	}
+
+	if filepath.IsAbs(assetPath) {
+		return fmt.Errorf("%w: asset path must not be absolute", ErrInvalidPath)
+	}
+
+	clean := filepath.Clean(assetPath)
+
+	if clean == "." || clean == ".." {
+		return fmt.Errorf("%w: asset path resolves to directory root", ErrInvalidPath)
+	}
+
+	if strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("%w: asset path attempts directory traversal", ErrInvalidPath)
+	}
+
+	return nil
+}
+
 // SaveAsset writes a binary asset to {basePath}/{repo}/assets/{path}.
 // No metadata sidecar is created; MIME type is detected from the file extension at serve time.
 func (s *Store) SaveAsset(_ context.Context, repo, path string, data []byte) error {
+	if err := validateAssetRelPath(path); err != nil {
+		return err
+	}
+
 	if err := s.validatePath(repo, assetsDir, path); err != nil {
 		return err
 	}
@@ -417,6 +452,10 @@ func (s *Store) SaveAsset(_ context.Context, repo, path string, data []byte) err
 
 // GetAsset reads a binary asset from the store by its repository and path.
 func (s *Store) GetAsset(_ context.Context, repo, path string) ([]byte, error) {
+	if err := validateAssetRelPath(path); err != nil {
+		return nil, err
+	}
+
 	if err := s.validatePath(repo, assetsDir, path); err != nil {
 		return nil, err
 	}
@@ -440,6 +479,10 @@ func (s *Store) GetAsset(_ context.Context, repo, path string) ([]byte, error) {
 
 // DeleteAsset removes a binary asset from the store and cleans up empty parent directories.
 func (s *Store) DeleteAsset(_ context.Context, repo, path string) error {
+	if err := validateAssetRelPath(path); err != nil {
+		return err
+	}
+
 	if err := s.validatePath(repo, assetsDir, path); err != nil {
 		return err
 	}
