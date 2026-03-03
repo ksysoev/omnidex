@@ -17,41 +17,64 @@ type DocNode struct {
 	Children []DocNode
 }
 
+// docEntry pairs an original DocumentMeta (full path preserved) with the
+// remaining path suffix used purely for recursive grouping.
+type docEntry struct {
+	doc           *core.DocumentMeta
+	remainingPath string
+}
+
 // BuildDocTree converts a flat list of DocumentMeta into a directory tree.
 // Root-level documents (no "/" in path) appear first, sorted alphabetically by path.
 // Subdirectory groups appear after, sorted alphabetically by folder name.
 // Supports arbitrary nesting depth via recursion.
+// The original DocumentMeta values (including full paths) are never mutated.
 func BuildDocTree(docs []core.DocumentMeta) []DocNode {
 	if len(docs) == 0 {
 		return nil
 	}
 
-	var rootDocs []core.DocumentMeta
+	entries := make([]docEntry, len(docs))
+	for i := range docs {
+		entries[i] = docEntry{doc: &docs[i], remainingPath: docs[i].Path}
+	}
 
-	folderGroups := make(map[string][]core.DocumentMeta)
+	return buildTree(entries)
+}
 
-	for _, doc := range docs {
-		slashIdx := strings.IndexByte(doc.Path, '/')
+// buildTree is the internal recursive helper that operates on docEntry slices
+// so original DocumentMeta pointers (and their full paths) are never modified.
+func buildTree(entries []docEntry) []DocNode {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	var rootEntries []docEntry
+
+	folderGroups := make(map[string][]docEntry)
+
+	for _, e := range entries {
+		slashIdx := strings.IndexByte(e.remainingPath, '/')
 		if slashIdx == -1 {
-			rootDocs = append(rootDocs, doc)
+			rootEntries = append(rootEntries, e)
 		} else {
-			folder := doc.Path[:slashIdx]
-			child := doc
-			child.Path = doc.Path[slashIdx+1:]
+			folder := e.remainingPath[:slashIdx]
+			child := e
+			child.remainingPath = e.remainingPath[slashIdx+1:]
 			folderGroups[folder] = append(folderGroups[folder], child)
 		}
 	}
 
-	sort.Slice(rootDocs, func(i, j int) bool {
-		return rootDocs[i].Path < rootDocs[j].Path
+	sort.Slice(rootEntries, func(i, j int) bool {
+		return rootEntries[i].doc.Path < rootEntries[j].doc.Path
 	})
 
-	nodes := make([]DocNode, 0, len(rootDocs)+len(folderGroups))
+	nodes := make([]DocNode, 0, len(rootEntries)+len(folderGroups))
 
-	for i := range rootDocs {
+	for _, e := range rootEntries {
 		nodes = append(nodes, DocNode{
-			Doc:  &rootDocs[i],
-			Name: rootDocs[i].Path,
+			Doc:  e.doc,
+			Name: e.remainingPath,
 		})
 	}
 
@@ -65,7 +88,7 @@ func BuildDocTree(docs []core.DocumentMeta) []DocNode {
 	for _, folder := range folders {
 		nodes = append(nodes, DocNode{
 			Name:     folder,
-			Children: BuildDocTree(folderGroups[folder]),
+			Children: buildTree(folderGroups[folder]),
 		})
 	}
 

@@ -67,13 +67,14 @@ func TestBuildDocTree_SingleFolderMultipleDocs(t *testing.T) {
 	require.Len(t, folder.Children, 2)
 
 	// Children inside the folder are also sorted.
+	// Name is the display name (filename only); Doc.Path is always the full original path.
 	assert.Equal(t, "deployment.md", folder.Children[0].Name)
 	assert.NotNil(t, folder.Children[0].Doc)
-	assert.Equal(t, "deployment.md", folder.Children[0].Doc.Path)
+	assert.Equal(t, "guides/deployment.md", folder.Children[0].Doc.Path)
 
 	assert.Equal(t, "setup.md", folder.Children[1].Name)
 	assert.NotNil(t, folder.Children[1].Doc)
-	assert.Equal(t, "setup.md", folder.Children[1].Doc.Path)
+	assert.Equal(t, "guides/setup.md", folder.Children[1].Doc.Path)
 }
 
 func TestBuildDocTree_MultipleFoldersSortedAlphabetically(t *testing.T) {
@@ -146,7 +147,7 @@ func TestBuildDocTree_ArbitraryNesting(t *testing.T) {
 	require.Len(t, refFolder.Children, 1)
 	assert.Equal(t, "endpoints.md", refFolder.Children[0].Name)
 	assert.NotNil(t, refFolder.Children[0].Doc)
-	assert.Equal(t, "endpoints.md", refFolder.Children[0].Doc.Path)
+	assert.Equal(t, "api/reference/endpoints.md", refFolder.Children[0].Doc.Path)
 }
 
 func TestBuildDocTree_OriginalPathNotMutated(t *testing.T) {
