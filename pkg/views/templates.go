@@ -870,7 +870,7 @@ const repoDocTreeSubTemplate = `{{define "repoDocTree"}}
 </a>
 {{else}}
 <div class="mt-4 mb-1">
-    <div class="flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-gray-600">
+    <div class="flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-gray-500">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         {{.Name}}
     </div>
@@ -898,7 +898,7 @@ const sidebarDocTreeSubTemplate = `{{define "sidebarDocTree"}}
 </li>
 {{else}}
 <li class="mt-2">
-    <div class="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+    <div class="flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-500">
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         {{.Name}}
     </div>
