@@ -45,7 +45,7 @@
   .mermaid-expand-btn { opacity: 1; pointer-events: auto; }
 }
 
-/* Mermaid fullscreen modal */
+/* Media fullscreen modal */
 #media-modal {
   display: none;
   position: fixed;

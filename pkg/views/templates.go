@@ -404,9 +404,12 @@ const layoutHeader = `<!DOCTYPE html>
                 canvas.innerHTML = '';
                 // Insert a placeholder with the same dimensions so the page
                 // layout does not collapse/reflow while the element is in the modal.
+                // Use <span> (not <div>) so the placeholder is valid in all parent
+                // contexts an image or SVG can appear in (e.g. <p>, <span>, <a>).
                 var elRect = el.getBoundingClientRect();
-                var placeholder = document.createElement('div');
+                var placeholder = document.createElement('span');
                 placeholder.className = 'media-placeholder';
+                placeholder.style.display = 'inline-block';
                 placeholder.style.width  = elRect.width  + 'px';
                 placeholder.style.height = elRect.height + 'px';
                 _activeSvgParent.insertBefore(placeholder, el);
