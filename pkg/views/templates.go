@@ -144,6 +144,7 @@ const layoutHeader = `<!DOCTYPE html>
                     initMermaidExpand();
                 });
             }
+            initImageExpand();
         });
         document.addEventListener('htmx:afterSwap', function(event) {
             initScrollSpy();
@@ -162,11 +163,12 @@ const layoutHeader = `<!DOCTYPE html>
             } else {
                 initMermaidExpand();
             }
+            initImageExpand();
         });
-        document.addEventListener('htmx:beforeSwap', function() { closeMermaidModal(); });
+        document.addEventListener('htmx:beforeSwap', function() { closeMediaModal(); });
 
         /* ================================================================
-           Mermaid diagram fullscreen viewer
+           Media fullscreen viewer (mermaid diagrams + images)
            ================================================================ */
         (function() {
             var modal, viewport, canvas, zoomLabel;
@@ -179,29 +181,29 @@ const layoutHeader = `<!DOCTYPE html>
             // Focus management
             var _previousFocus = null;
             var _prevBodyOverflow = '';
-            // SVG move-in/out tracking
+            // Active element move-in/out tracking
             var _activeSvg = null, _activeSvgParent = null;
             var _activeSvgOrigWidth = null, _activeSvgOrigHeight = null, _activeSvgOrigStyle = null;
             var _activeSvgPlaceholder = null;
 
             function getModal() {
                 if (!modal) {
-                    modal    = document.getElementById('mermaid-modal');
-                    viewport = document.getElementById('mermaid-modal-viewport');
-                    canvas   = document.getElementById('mermaid-modal-canvas');
-                    zoomLabel = document.getElementById('mermaid-zoom-level');
-                    var closeBtn  = document.getElementById('mermaid-modal-close');
-                    var zoomIn    = document.getElementById('mermaid-zoom-in');
-                    var zoomOut   = document.getElementById('mermaid-zoom-out');
-                    var zoomReset = document.getElementById('mermaid-zoom-reset');
-                    if (closeBtn)  closeBtn.addEventListener('click', closeMermaidModal);
+                    modal    = document.getElementById('media-modal');
+                    viewport = document.getElementById('media-modal-viewport');
+                    canvas   = document.getElementById('media-modal-canvas');
+                    zoomLabel = document.getElementById('media-zoom-level');
+                    var closeBtn  = document.getElementById('media-modal-close');
+                    var zoomIn    = document.getElementById('media-zoom-in');
+                    var zoomOut   = document.getElementById('media-zoom-out');
+                    var zoomReset = document.getElementById('media-zoom-reset');
+                    if (closeBtn)  closeBtn.addEventListener('click', closeMediaModal);
                     if (zoomIn)    zoomIn.addEventListener('click', function() { applyZoom(1.25, viewport.clientWidth / 2, viewport.clientHeight / 2); });
                     if (zoomOut)   zoomOut.addEventListener('click', function() { applyZoom(0.8, viewport.clientWidth / 2, viewport.clientHeight / 2); });
                     if (zoomReset) zoomReset.addEventListener('click', fitToScreen);
                     if (modal) {
                         modal.addEventListener('click', function(e) {
                             if (hasDragged) { hasDragged = false; return; }
-                            if (e.target === modal || e.target === viewport) { closeMermaidModal(); }
+                            if (e.target === modal || e.target === viewport) { closeMediaModal(); }
                         });
                     }
                 }
@@ -225,14 +227,25 @@ const layoutHeader = `<!DOCTYPE html>
 
             function fitToScreen() {
                 if (!canvas || !viewport) return;
-                var svg = canvas.querySelector('svg');
-                if (!svg) return;
+                var el = canvas.querySelector('svg') || canvas.querySelector('img');
+                if (!el) return;
                 var vw = viewport.clientWidth  - 64;
                 var vh = viewport.clientHeight - 64;
-                // Read explicit px dimensions set by openMermaidModal.
-                var sw = parseFloat(svg.getAttribute('width'))  || 0;
-                var sh = parseFloat(svg.getAttribute('height')) || 0;
-                if (!sw || !sh) { sw = vw; sh = vh; }
+                var sw, sh;
+                if (el.tagName.toLowerCase() === 'svg') {
+                    // Read explicit px dimensions stamped by openMediaModal.
+                    sw = parseFloat(el.getAttribute('width'))  || 0;
+                    sh = parseFloat(el.getAttribute('height')) || 0;
+                } else {
+                    // For <img> use natural (decoded) dimensions.
+                    sw = el.naturalWidth  || 0;
+                    sh = el.naturalHeight || 0;
+                }
+                if (!sw || !sh) {
+                    var br = el.getBoundingClientRect();
+                    sw = br.width  || vw;
+                    sh = br.height || vh;
+                }
                 var fitScale = Math.min(vw / sw, vh / sh);
                 scale = Math.min(maxScale, Math.max(minScale, fitScale));
                 tx = (viewport.clientWidth  - sw * scale) / 2;
@@ -268,13 +281,13 @@ const layoutHeader = `<!DOCTYPE html>
                 var rect = viewport.getBoundingClientRect();
                 var cx = e.clientX - rect.left;
                 var cy = e.clientY - rect.top;
-                var delta = e.deltaY < 0 ? 1.06 : (1 / 1.06);
+                var delta = e.deltaY < 0 ? 1.03 : (1 / 1.03);
                 applyZoom(delta, cx, cy);
             }
             function onKeyDown(e) {
                 if (!modalOpen) return;
                 switch (e.key) {
-                    case 'Escape': closeMermaidModal(); break;
+                    case 'Escape': closeMediaModal(); break;
                     case 'Tab': {
                         // Focus trap: keep Tab/Shift+Tab inside the modal.
                         var focusable = modal.querySelectorAll(
@@ -343,49 +356,65 @@ const layoutHeader = `<!DOCTYPE html>
                 if (e.touches.length === 0) { isPanning = false; }
             }
 
-            window.openMermaidModal = function(svgEl) {
+            window.openMediaModal = function(el) {
                 if (!getModal()) return;
 
-                // Resolve intrinsic pixel dimensions from viewBox or bounding rect.
-                // Mermaid sets width="100%" on the SVG; viewBox always carries the
-                // true pixel dimensions, so prefer it over the attribute value.
+                var isSvg = el.tagName.toLowerCase() === 'svg';
                 var intrinsicW = 0, intrinsicH = 0;
-                var vb = svgEl.viewBox && svgEl.viewBox.baseVal;
-                if (vb && vb.width && vb.height) {
-                    intrinsicW = vb.width;
-                    intrinsicH = vb.height;
-                }
-                if (!intrinsicW || !intrinsicH) {
-                    var br = svgEl.getBoundingClientRect();
-                    intrinsicW = br.width;
-                    intrinsicH = br.height;
+                if (isSvg) {
+                    // Resolve intrinsic pixel dimensions from viewBox or bounding rect.
+                    // Mermaid sets width="100%" on the SVG; viewBox always carries the
+                    // true pixel dimensions, so prefer it over the attribute value.
+                    var vb = el.viewBox && el.viewBox.baseVal;
+                    if (vb && vb.width && vb.height) {
+                        intrinsicW = vb.width;
+                        intrinsicH = vb.height;
+                    }
+                    if (!intrinsicW || !intrinsicH) {
+                        var br = el.getBoundingClientRect();
+                        intrinsicW = br.width;
+                        intrinsicH = br.height;
+                    }
+                } else {
+                    // For <img> use naturalWidth/naturalHeight (decoded pixel size).
+                    intrinsicW = el.naturalWidth  || 0;
+                    intrinsicH = el.naturalHeight || 0;
+                    if (!intrinsicW || !intrinsicH) {
+                        var ibr = el.getBoundingClientRect();
+                        intrinsicW = ibr.width;
+                        intrinsicH = ibr.height;
+                    }
                 }
 
-                // Move the original SVG into the modal canvas instead of cloning.
-                // Cloning duplicates all id attributes, which breaks SVG fragment
-                // references (url(#…)) because they resolve document-wide.
-                _activeSvg = svgEl;
-                _activeSvgParent = svgEl.parentNode;
-                _activeSvgOrigWidth  = svgEl.getAttribute('width');
-                _activeSvgOrigHeight = svgEl.getAttribute('height');
-                _activeSvgOrigStyle  = svgEl.getAttribute('style');
-                svgEl.removeAttribute('style');
-                // Stamp explicit px dimensions so fitToScreen has a stable size.
-                if (intrinsicW && intrinsicH) {
-                    svgEl.setAttribute('width',  intrinsicW);
-                    svgEl.setAttribute('height', intrinsicH);
+                // Move the original element into the modal canvas instead of cloning.
+                // For SVGs, cloning duplicates all id attributes, which breaks SVG
+                // fragment references (url(#…)) because they resolve document-wide.
+                // For consistency, images also use the same move+placeholder strategy.
+                _activeSvg = el;
+                _activeSvgParent = el.parentNode;
+                _activeSvgOrigWidth  = el.getAttribute('width');
+                _activeSvgOrigHeight = el.getAttribute('height');
+                _activeSvgOrigStyle  = el.getAttribute('style');
+                el.removeAttribute('style');
+                if (isSvg && intrinsicW && intrinsicH) {
+                    // Stamp explicit px dimensions so fitToScreen has a stable size.
+                    el.setAttribute('width',  intrinsicW);
+                    el.setAttribute('height', intrinsicH);
                 }
                 canvas.innerHTML = '';
                 // Insert a placeholder with the same dimensions so the page
-                // layout does not collapse/reflow while the SVG is in the modal.
-                var svgRect = svgEl.getBoundingClientRect();
-                var placeholder = document.createElement('div');
-                placeholder.className = 'mermaid-svg-placeholder';
-                placeholder.style.width  = svgRect.width  + 'px';
-                placeholder.style.height = svgRect.height + 'px';
-                _activeSvgParent.insertBefore(placeholder, svgEl);
+                // layout does not collapse/reflow while the element is in the modal.
+                // Use <span> (not <div>) so the placeholder is valid in all parent
+                // contexts an image or SVG can appear in (e.g. <p>, <span>, <a>).
+                var elRect = el.getBoundingClientRect();
+                var placeholder = document.createElement('span');
+                placeholder.className = 'media-placeholder';
+                placeholder.style.display = 'inline-block';
+                placeholder.style.width  = elRect.width  + 'px';
+                placeholder.style.height = elRect.height + 'px';
+                _activeSvgParent.insertBefore(placeholder, el);
                 _activeSvgPlaceholder = placeholder;
-                canvas.appendChild(svgEl);
+                canvas.appendChild(el);
 
                 scale = 1; tx = 0; ty = 0;
                 applyTransform();
@@ -419,14 +448,14 @@ const layoutHeader = `<!DOCTYPE html>
                 viewport.addEventListener('touchend',   _boundTouchEnd);
             };
 
-            window.closeMermaidModal = function() {
+            window.closeMediaModal = function() {
                 if (!modalOpen || !getModal()) return;
                 modal.classList.remove('is-open');
                 document.body.style.overflow = _prevBodyOverflow;
                 modalOpen = false;
                 isPanning = false;
 
-                // Move the SVG back to its original parent and restore attributes.
+                // Move the element back to its original parent and restore attributes.
                 if (_activeSvg && _activeSvgParent) {
                     if (_activeSvgOrigWidth !== null) {
                         _activeSvg.setAttribute('width', _activeSvgOrigWidth);
@@ -443,7 +472,7 @@ const layoutHeader = `<!DOCTYPE html>
                     } else {
                         _activeSvg.removeAttribute('style');
                     }
-                    // Reinsert the SVG at the placeholder's position to preserve original ordering.
+                    // Reinsert the element at the placeholder's position to preserve original ordering.
                     if (_activeSvgPlaceholder && _activeSvgPlaceholder.parentNode) {
                         _activeSvgPlaceholder.parentNode.insertBefore(_activeSvg, _activeSvgPlaceholder);
                         _activeSvgPlaceholder.parentNode.removeChild(_activeSvgPlaceholder);
@@ -491,9 +520,38 @@ const layoutHeader = `<!DOCTYPE html>
                 btn.addEventListener('click', function(e) {
                     e.stopPropagation();
                     var s = pre.querySelector(':scope > svg');
-                    if (s) { window.openMermaidModal(s); }
+                    if (s) { window.openMediaModal(s); }
                 });
                 pre.appendChild(btn);
+            });
+        }
+
+        function initImageExpand() {
+            var images = document.querySelectorAll('.prose img');
+            images.forEach(function(img) {
+                // Determine what to wrap: if the direct parent is an <a>, wrap the
+                // <a> so the link and expand button coexist inside the wrapper.
+                var target = (img.parentNode && img.parentNode.tagName.toLowerCase() === 'a')
+                    ? img.parentNode
+                    : img;
+                // Idempotency: skip if the target is already inside a wrapper.
+                if (target.parentNode && target.parentNode.classList.contains('img-expand-wrapper')) return;
+                // Build the wrapper <span>.
+                var wrapper = document.createElement('span');
+                wrapper.className = 'img-expand-wrapper';
+                target.parentNode.insertBefore(wrapper, target);
+                wrapper.appendChild(target);
+                // Build the expand button.
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'img-expand-btn';
+                btn.setAttribute('aria-label', 'View image fullscreen');
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg><span>Expand</span>';
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    window.openMediaModal(img);
+                });
+                wrapper.appendChild(btn);
             });
         }
     </script>
@@ -519,25 +577,25 @@ const layoutFooter = `</main>
         <p>Powered by Omnidex</p>
     </footer>
 
-    <!-- Mermaid diagram fullscreen viewer modal -->
-    <div id="mermaid-modal" role="dialog" aria-modal="true" aria-label="Diagram viewer">
-        <div id="mermaid-modal-header">
-            <button id="mermaid-modal-close" aria-label="Close diagram viewer">
+    <!-- Media fullscreen viewer modal (mermaid diagrams + images) -->
+    <div id="media-modal" role="dialog" aria-modal="true" aria-label="Media viewer">
+        <div id="media-modal-header">
+            <button id="media-modal-close" aria-label="Close media viewer">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
-        <div id="mermaid-modal-viewport" tabindex="-1">
-            <div id="mermaid-modal-canvas"></div>
+        <div id="media-modal-viewport" tabindex="-1">
+            <div id="media-modal-canvas"></div>
         </div>
-        <div id="mermaid-modal-controls">
-            <button class="mermaid-ctrl-btn" id="mermaid-zoom-in" aria-label="Zoom in">
+        <div id="media-modal-controls">
+            <button class="media-ctrl-btn" id="media-zoom-in" aria-label="Zoom in">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
             </button>
-            <span id="mermaid-zoom-level" aria-live="polite" aria-label="Zoom level">100%</span>
-            <button class="mermaid-ctrl-btn" id="mermaid-zoom-out" aria-label="Zoom out">
+            <span id="media-zoom-level" aria-live="polite" aria-label="Zoom level">100%</span>
+            <button class="media-ctrl-btn" id="media-zoom-out" aria-label="Zoom out">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
             </button>
-            <button class="mermaid-ctrl-btn" id="mermaid-zoom-reset" aria-label="Fit to screen" style="width: auto; padding: 0 0.5rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.02em;">Fit</button>
+            <button class="media-ctrl-btn" id="media-zoom-reset" aria-label="Fit to screen" style="width: auto; padding: 0 0.5rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.02em;">Fit</button>
         </div>
     </div>
 </body>
