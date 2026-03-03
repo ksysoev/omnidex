@@ -632,17 +632,13 @@ const docContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{.Doc.Repo}}</h3>
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                <a href="/docs/{{.Doc.Repo}}/"
+                   hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
+                   class="block hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+            </h3>
             <ul class="space-y-1">
-                {{range .NavDocs}}
-                <li>
-                    <a href="/docs/{{.Repo}}/{{.Path}}"
-                       hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
-                       class="block px-3 py-1.5 text-sm rounded-md hover:bg-gray-100 text-gray-700 hover:text-gray-900">
-                        {{.Title}}
-                    </a>
-                </li>
-                {{end}}
+                {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
             </ul>
         </nav>
     </aside>
@@ -745,18 +741,8 @@ const repoIndexContentBody = `
     </div>
     <h1 class="text-3xl font-bold text-gray-900 mb-6">{{.Repo}}</h1>
     {{if .Docs}}
-    <div class="space-y-3">
-        {{range .Docs}}
-        <a href="/docs/{{.Repo}}/{{.Path}}"
-           hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
-           class="block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
-            <h2 class="text-lg font-semibold text-gray-900 mb-2">{{.Title}}</h2>
-            <div class="flex items-center gap-4 text-sm text-gray-500">
-                <span>{{.Path}}</span>
-                <span>Updated {{.UpdatedAt.Format "Jan 02, 2006"}}</span>
-            </div>
-        </a>
-        {{end}}
+    <div class="space-y-1">
+        {{template "repoDocTree" .Docs}}
     </div>
     {{else}}
     <div class="text-center py-16">
@@ -773,17 +759,13 @@ const openapiDocContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{.Doc.Repo}}</h3>
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                <a href="/docs/{{.Doc.Repo}}/"
+                   hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
+                   class="block hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+            </h3>
             <ul class="space-y-1">
-                {{range .NavDocs}}
-                <li>
-                    <a href="/docs/{{.Repo}}/{{.Path}}"
-                       hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="true"
-                       class="block px-3 py-1.5 text-sm rounded-md hover:bg-gray-100 text-gray-700 hover:text-gray-900">
-                        {{.Title}}
-                    </a>
-                </li>
-                {{end}}
+                {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
             </ul>
         </nav>
     </aside>
@@ -880,3 +862,58 @@ const notFoundBody = `
         Go Home
     </a>
 </div>`
+
+// repoDocTreeSubTemplate is a recursive named sub-template that renders a []DocNode
+// as a directory tree for the repo index page.
+// Folder nodes render as a heading followed by an indented subtree.
+// Document nodes render as a clickable card row with title and updated date.
+const repoDocTreeSubTemplate = `{{define "repoDocTree"}}
+{{range .}}
+{{if .Doc}}
+<a href="/docs/{{.Doc.Repo}}/{{.Doc.Path}}"
+   hx-get="/docs/{{.Doc.Repo}}/{{.Doc.Path}}" hx-target="#main-content" hx-push-url="true"
+   class="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all mb-2">
+    <h2 class="text-lg font-semibold text-gray-900">{{.Doc.Title}}</h2>
+    <span class="text-sm text-gray-500 shrink-0 ml-4">Updated {{.Doc.UpdatedAt.Format "Jan 02, 2006"}}</span>
+</a>
+{{else}}
+<div class="mt-4 mb-1">
+    <div class="flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-gray-500">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        {{.Name}}
+    </div>
+    <div class="pl-4 border-l border-gray-200 ml-2">
+        {{template "repoDocTree" .Children}}
+    </div>
+</div>
+{{end}}
+{{end}}
+{{end}}`
+
+// sidebarDocTreeSubTemplate is a recursive named sub-template that renders a []DocNode
+// as a directory tree for the sidebar navigation on the document reading page.
+// Folder nodes render as a non-clickable label followed by an indented subtree.
+// Document nodes render as clickable links.
+const sidebarDocTreeSubTemplate = `{{define "sidebarDocTree"}}
+{{range .Nodes}}
+{{if .Doc}}
+<li>
+    <a href="/docs/{{.Doc.Repo}}/{{.Doc.Path}}"
+       hx-get="/docs/{{.Doc.Repo}}/{{.Doc.Path}}" hx-target="#main-content" hx-push-url="true"
+       class="block px-3 py-1.5 text-sm rounded-md {{if eq .Doc.Path $.CurrentPath}}bg-blue-50 text-blue-700 font-medium{{else}}text-gray-700 hover:bg-gray-100 hover:text-gray-900{{end}}">
+        {{.Doc.Title}}
+    </a>
+</li>
+{{else}}
+<li class="mt-2">
+    <div class="flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-500">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        {{.Name}}
+    </div>
+    <ul class="pl-1 border-l border-gray-200 ml-1 space-y-1">
+        {{template "sidebarDocTree" (sidebarChildren .Children $.CurrentPath)}}
+    </ul>
+</li>
+{{end}}
+{{end}}
+{{end}}`

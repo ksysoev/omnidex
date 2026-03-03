@@ -83,17 +83,25 @@ func New() *Renderer {
 			}
 		},
 		"githubURL": githubBlobURL,
+		// sidebarNav builds a sidebarCtx from a node slice and current path, used to
+		// initialise the sidebarDocTree recursive sub-template from the outer template.
+		"sidebarNav": newSidebarCtx,
+		// sidebarChildren builds a sidebarCtx for a folder's children, propagating the
+		// current path so active-item highlighting works at every nesting level.
+		"sidebarChildren": func(nodes []DocNode, currentPath string) sidebarCtx {
+			return sidebarCtx{Nodes: nodes, CurrentPath: currentPath}
+		},
 	}
 
 	return &Renderer{
 		homeFull:          template.Must(template.New("home_full").Funcs(funcMap).Parse(layoutHeader + homeContentBody + layoutFooter)),
 		homePartial:       template.Must(template.New("home_partial").Funcs(funcMap).Parse(homeContentBody)),
-		repoIndexFull:     template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter)),
-		repoIndexPartial:  template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody)),
-		docFull:           template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter)),
-		docPartial:        template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody)),
-		openapiDocFull:    template.Must(template.New("openapi_doc_full").Funcs(funcMap).Parse(layoutHeader + openapiDocContentBody + layoutFooter)),
-		openapiDocPartial: template.Must(template.New("openapi_doc_partial").Funcs(funcMap).Parse(openapiDocContentBody)),
+		repoIndexFull:     template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter + repoDocTreeSubTemplate)),
+		repoIndexPartial:  template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody + repoDocTreeSubTemplate)),
+		docFull:           template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter + sidebarDocTreeSubTemplate)),
+		docPartial:        template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody + sidebarDocTreeSubTemplate)),
+		openapiDocFull:    template.Must(template.New("openapi_doc_full").Funcs(funcMap).Parse(layoutHeader + openapiDocContentBody + layoutFooter + sidebarDocTreeSubTemplate)),
+		openapiDocPartial: template.Must(template.New("openapi_doc_partial").Funcs(funcMap).Parse(openapiDocContentBody + sidebarDocTreeSubTemplate)),
 		searchFull:        template.Must(template.New("search_full").Funcs(funcMap).Parse(layoutHeader + searchContentBody + layoutFooter)),
 		searchPartial:     template.Must(template.New("search_partial").Funcs(funcMap).Parse(searchContentBody)),
 		searchResults:     template.Must(template.New("search_results").Funcs(funcMap).Parse(searchResultsBody)),
@@ -121,12 +129,12 @@ func (v *Renderer) RenderHome(w io.Writer, repos []core.RepoInfo, partial bool) 
 // repoIndexData is the data passed to the repo index page template.
 type repoIndexData struct {
 	Repo string
-	Docs []core.DocumentMeta
+	Docs []DocNode
 }
 
-// RenderRepoIndex renders the repository index page with a list of documents.
+// RenderRepoIndex renders the repository index page with documents grouped by directory tree.
 func (v *Renderer) RenderRepoIndex(w io.Writer, repo string, docs []core.DocumentMeta, partial bool) error {
-	data := repoIndexData{Repo: repo, Docs: docs}
+	data := repoIndexData{Repo: repo, Docs: BuildDocTree(docs)}
 
 	tmpl := v.repoIndexFull
 	if partial {
@@ -136,22 +144,35 @@ func (v *Renderer) RenderRepoIndex(w io.Writer, repo string, docs []core.Documen
 	return execTemplate(w, tmpl, data)
 }
 
-// docData is the data passed to the document page template.
+// sidebarCtx is the data passed to the sidebarDocTree recursive sub-template.
+// It carries both the nodes to render and the current document path so the
+// template can highlight the active item.
+type sidebarCtx struct {
+	CurrentPath string
+	Nodes       []DocNode
+}
+
+func newSidebarCtx(nodes []DocNode, currentPath string) sidebarCtx {
+	return sidebarCtx{Nodes: nodes, CurrentPath: currentPath}
+}
+
 type docData struct {
-	Doc      core.Document
-	HTML     string
-	Headings []core.Heading
-	NavDocs  []core.DocumentMeta
+	Doc         core.Document
+	HTML        string
+	CurrentPath string
+	Headings    []core.Heading
+	NavDocs     []DocNode
 }
 
 // RenderDoc renders a document page with sidebar navigation and table of contents.
 // For OpenAPI documents, it renders the Scalar API Reference template instead of the markdown prose template.
 func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error { //nolint:gocritic // Document is passed by value for immutability
 	data := docData{
-		Doc:      doc,
-		HTML:     string(html),
-		Headings: headings,
-		NavDocs:  navDocs,
+		Doc:         doc,
+		HTML:        string(html),
+		Headings:    headings,
+		NavDocs:     BuildDocTree(navDocs),
+		CurrentPath: doc.Path,
 	}
 
 	tmpl := v.selectDocTemplate(doc.ContentType, partial)
