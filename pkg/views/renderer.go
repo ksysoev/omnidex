@@ -88,12 +88,12 @@ func New() *Renderer {
 	return &Renderer{
 		homeFull:          template.Must(template.New("home_full").Funcs(funcMap).Parse(layoutHeader + homeContentBody + layoutFooter)),
 		homePartial:       template.Must(template.New("home_partial").Funcs(funcMap).Parse(homeContentBody)),
-		repoIndexFull:     template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter)),
-		repoIndexPartial:  template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody)),
-		docFull:           template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter)),
-		docPartial:        template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody)),
-		openapiDocFull:    template.Must(template.New("openapi_doc_full").Funcs(funcMap).Parse(layoutHeader + openapiDocContentBody + layoutFooter)),
-		openapiDocPartial: template.Must(template.New("openapi_doc_partial").Funcs(funcMap).Parse(openapiDocContentBody)),
+		repoIndexFull:     template.Must(template.New("repo_index_full").Funcs(funcMap).Parse(layoutHeader + repoIndexContentBody + layoutFooter + repoDocTreeSubTemplate)),
+		repoIndexPartial:  template.Must(template.New("repo_index_partial").Funcs(funcMap).Parse(repoIndexContentBody + repoDocTreeSubTemplate)),
+		docFull:           template.Must(template.New("doc_full").Funcs(funcMap).Parse(layoutHeader + docContentBody + layoutFooter + sidebarDocTreeSubTemplate)),
+		docPartial:        template.Must(template.New("doc_partial").Funcs(funcMap).Parse(docContentBody + sidebarDocTreeSubTemplate)),
+		openapiDocFull:    template.Must(template.New("openapi_doc_full").Funcs(funcMap).Parse(layoutHeader + openapiDocContentBody + layoutFooter + sidebarDocTreeSubTemplate)),
+		openapiDocPartial: template.Must(template.New("openapi_doc_partial").Funcs(funcMap).Parse(openapiDocContentBody + sidebarDocTreeSubTemplate)),
 		searchFull:        template.Must(template.New("search_full").Funcs(funcMap).Parse(layoutHeader + searchContentBody + layoutFooter)),
 		searchPartial:     template.Must(template.New("search_partial").Funcs(funcMap).Parse(searchContentBody)),
 		searchResults:     template.Must(template.New("search_results").Funcs(funcMap).Parse(searchResultsBody)),
@@ -121,12 +121,12 @@ func (v *Renderer) RenderHome(w io.Writer, repos []core.RepoInfo, partial bool) 
 // repoIndexData is the data passed to the repo index page template.
 type repoIndexData struct {
 	Repo string
-	Docs []core.DocumentMeta
+	Docs []DocNode
 }
 
-// RenderRepoIndex renders the repository index page with a list of documents.
+// RenderRepoIndex renders the repository index page with documents grouped by directory tree.
 func (v *Renderer) RenderRepoIndex(w io.Writer, repo string, docs []core.DocumentMeta, partial bool) error {
-	data := repoIndexData{Repo: repo, Docs: docs}
+	data := repoIndexData{Repo: repo, Docs: BuildDocTree(docs)}
 
 	tmpl := v.repoIndexFull
 	if partial {
@@ -141,7 +141,7 @@ type docData struct {
 	Doc      core.Document
 	HTML     string
 	Headings []core.Heading
-	NavDocs  []core.DocumentMeta
+	NavDocs  []DocNode
 }
 
 // RenderDoc renders a document page with sidebar navigation and table of contents.
@@ -151,7 +151,7 @@ func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headin
 		Doc:      doc,
 		HTML:     string(html),
 		Headings: headings,
-		NavDocs:  navDocs,
+		NavDocs:  BuildDocTree(navDocs),
 	}
 
 	tmpl := v.selectDocTemplate(doc.ContentType, partial)
