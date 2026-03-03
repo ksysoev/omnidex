@@ -632,9 +632,11 @@ const docContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <a href="/docs/{{.Doc.Repo}}/"
-               hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
-               class="block text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                <a href="/docs/{{.Doc.Repo}}/"
+                   hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
+                   class="block hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+            </h3>
             <ul class="space-y-1">
                 {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
             </ul>
@@ -757,9 +759,11 @@ const openapiDocContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <a href="/docs/{{.Doc.Repo}}/"
-               hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
-               class="block text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                <a href="/docs/{{.Doc.Repo}}/"
+                   hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
+                   class="block hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+            </h3>
             <ul class="space-y-1">
                 {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
             </ul>
