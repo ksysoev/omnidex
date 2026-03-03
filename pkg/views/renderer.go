@@ -83,6 +83,14 @@ func New() *Renderer {
 			}
 		},
 		"githubURL": githubBlobURL,
+		// sidebarNav builds a sidebarCtx from a node slice and current path, used to
+		// initialise the sidebarDocTree recursive sub-template from the outer template.
+		"sidebarNav": newSidebarCtx,
+		// sidebarChildren builds a sidebarCtx for a folder's children, propagating the
+		// current path so active-item highlighting works at every nesting level.
+		"sidebarChildren": func(nodes []DocNode, currentPath string) sidebarCtx {
+			return sidebarCtx{Nodes: nodes, CurrentPath: currentPath}
+		},
 	}
 
 	return &Renderer{
@@ -136,22 +144,35 @@ func (v *Renderer) RenderRepoIndex(w io.Writer, repo string, docs []core.Documen
 	return execTemplate(w, tmpl, data)
 }
 
-// docData is the data passed to the document page template.
+// sidebarCtx is the data passed to the sidebarDocTree recursive sub-template.
+// It carries both the nodes to render and the current document path so the
+// template can highlight the active item.
+type sidebarCtx struct {
+	CurrentPath string
+	Nodes       []DocNode
+}
+
+func newSidebarCtx(nodes []DocNode, currentPath string) sidebarCtx {
+	return sidebarCtx{Nodes: nodes, CurrentPath: currentPath}
+}
+
 type docData struct {
-	Doc      core.Document
-	HTML     string
-	Headings []core.Heading
-	NavDocs  []DocNode
+	Doc         core.Document
+	HTML        string
+	CurrentPath string
+	Headings    []core.Heading
+	NavDocs     []DocNode
 }
 
 // RenderDoc renders a document page with sidebar navigation and table of contents.
 // For OpenAPI documents, it renders the Scalar API Reference template instead of the markdown prose template.
 func (v *Renderer) RenderDoc(w io.Writer, doc core.Document, html []byte, headings []core.Heading, navDocs []core.DocumentMeta, partial bool) error { //nolint:gocritic // Document is passed by value for immutability
 	data := docData{
-		Doc:      doc,
-		HTML:     string(html),
-		Headings: headings,
-		NavDocs:  BuildDocTree(navDocs),
+		Doc:         doc,
+		HTML:        string(html),
+		Headings:    headings,
+		NavDocs:     BuildDocTree(navDocs),
+		CurrentPath: doc.Path,
 	}
 
 	tmpl := v.selectDocTemplate(doc.ContentType, partial)

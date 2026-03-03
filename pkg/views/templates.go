@@ -632,9 +632,11 @@ const docContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{.Doc.Repo}}</h3>
+            <a href="/docs/{{.Doc.Repo}}/"
+               hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
+               class="block text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
             <ul class="space-y-1">
-                {{template "sidebarDocTree" .NavDocs}}
+                {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
             </ul>
         </nav>
     </aside>
@@ -755,9 +757,11 @@ const openapiDocContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{.Doc.Repo}}</h3>
+            <a href="/docs/{{.Doc.Repo}}/"
+               hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
+               class="block text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
             <ul class="space-y-1">
-                {{template "sidebarDocTree" .NavDocs}}
+                {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
             </ul>
         </nav>
     </aside>
@@ -887,12 +891,12 @@ const repoDocTreeSubTemplate = `{{define "repoDocTree"}}
 // Folder nodes render as a non-clickable label followed by an indented subtree.
 // Document nodes render as clickable links.
 const sidebarDocTreeSubTemplate = `{{define "sidebarDocTree"}}
-{{range .}}
+{{range .Nodes}}
 {{if .Doc}}
 <li>
     <a href="/docs/{{.Doc.Repo}}/{{.Doc.Path}}"
        hx-get="/docs/{{.Doc.Repo}}/{{.Doc.Path}}" hx-target="#main-content" hx-push-url="true"
-       class="block px-3 py-1.5 text-sm rounded-md hover:bg-gray-100 text-gray-700 hover:text-gray-900">
+       class="block px-3 py-1.5 text-sm rounded-md {{if eq .Doc.Path $.CurrentPath}}bg-blue-50 text-blue-700 font-medium{{else}}text-gray-700 hover:bg-gray-100 hover:text-gray-900{{end}}">
         {{.Doc.Title}}
     </a>
 </li>
@@ -902,8 +906,8 @@ const sidebarDocTreeSubTemplate = `{{define "sidebarDocTree"}}
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         {{.Name}}
     </div>
-    <ul class="pl-3 border-l border-gray-200 ml-3 space-y-1">
-        {{template "sidebarDocTree" .Children}}
+    <ul class="pl-1 border-l border-gray-200 ml-1 space-y-1">
+        {{template "sidebarDocTree" (sidebarChildren .Children $.CurrentPath)}}
     </ul>
 </li>
 {{end}}
