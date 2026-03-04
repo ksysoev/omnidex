@@ -1,0 +1,72 @@
+# Docker Compose configuration for production deployment on Cloudlab
+# This file is used for Docker Swarm stack deployment
+
+services:
+  omnidex:
+    image: "ghcr.io/ksysoev/omnidex:${OMNIDEX_VERSION:-latest}"
+    environment:
+      - API_LISTEN=:8080
+      - API_API_KEYS=${API_API_KEYS}
+      - STORAGE_PATH=/data/docs
+      - SEARCH_INDEX_PATH=/data/search
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_TEXT=false
+    volumes:
+      - omnidex_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "omnidex", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+
+  mit-client:
+    image: "ghcr.io/ksysoev/make-it-public:latest"
+    environment:
+      - EXPOSE=omnidex:8080
+      - TOKEN=${MIT_TOKEN}
+      - SERVER=${MIT_SERVER:-make-it-public.dev:8081}
+      - LOG_LEVEL=info
+      - LOG_TEXT=false
+    networks:
+      - backend
+    depends_on:
+      - omnidex
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+
+volumes:
+  omnidex_data:
+
+networks:
+  backend:
+    driver: overlay
+    name: ${NETWORK_NAME:-omnidex-network}

@@ -15,6 +15,11 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_type == 'tag' && 'production' || '' }}
+    concurrency:
+      group: ${{ github.ref_type == 'tag' && 'production-omnidex' || format('omnidex-{0}', github.run_id) }}
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -41,9 +46,11 @@ jobs:
           if [[ $GITHUB_REF_TYPE == "tag" ]]; then
             # For tag triggers, use the tag name
             echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           else
             # For branch/commit triggers, use the commit hash
             echo "VERSION=${GITHUB_SHA}" >> $GITHUB_ENV
+            echo "version=${GITHUB_SHA}" >> $GITHUB_OUTPUT
           fi
       - name: Build and push Docker image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
@@ -55,4 +62,30 @@ jobs:
           platforms: ${{  github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           build-args: |
             VERSION=${{ env.VERSION }}
+
+  deploy:
+    needs: [build-and-push]
+    if: github.ref_type == 'tag'
+    uses: ksysoev/cloudlab/.github/workflows/deploy-service.yml@main
+    with:
+      service_name: omnidex
+      docker_compose_file: deploy/docker-compose.yml
+      health_check_timeout: 60
+      enable_rollback: true
+      environment_name: production
+      environment_vars: |
+        {
+          "OMNIDEX_VERSION": "${{ needs.build-and-push.outputs.version }}",
+          "NETWORK_NAME": "omnidex-network"
+        }
+    secrets:
+      ssh_key: ${{ secrets.SSH_KEY }}
+      ssh_host: ${{ secrets.HOST }}
+      ssh_user: ${{ secrets.USERNAME }}
+      ssh_port: ${{ secrets.PORT }}
+      deployment_secrets: |
+        {
+          "API_API_KEYS": "${{ secrets.API_API_KEYS }}",
+          "MIT_TOKEN": "${{ secrets.MIT_TOKEN }}"
+        }
 
