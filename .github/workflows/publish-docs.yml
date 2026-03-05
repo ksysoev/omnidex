@@ -14,19 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Publish README to Omnidex
+      - name: Publish docs to Omnidex
         uses: ksysoev/omnidex/action@main
         with:
           omnidex_url: ${{ vars.OMNIDEX_URL }}
           api_key: ${{ secrets.OMNIDEX_API_KEY }}
           docs_path: .
-          file_pattern: README.md
-
-      - name: Publish sample docs to Omnidex
-        uses: ksysoev/omnidex/action@main
-        with:
-          omnidex_url: ${{ vars.OMNIDEX_URL }}
-          api_key: ${{ secrets.OMNIDEX_API_KEY }}
-          docs_path: docs/sample
-          file_pattern: "**/*.{md,yaml,yml,json}"
-          sync: "false"
+          file_pattern: "{README.md,docs/sample/**/*.{md,yaml,yml,json}}"
+          sync: "true"
