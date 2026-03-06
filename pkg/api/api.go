@@ -29,7 +29,7 @@ type API struct {
 // Config holds the configuration for the API server.
 type Config struct {
 	Listen           string   `mapstructure:"listen"`
-	APIKeys          []string `mapstructure:"api_keys"`            //nolint:gosec // G117: field name matches secret pattern but this is a config struct holding key values, not a secret leak
+	APIKeys          []string `mapstructure:"api_keys"`
 	MaxIngestBodyMiB int64    `mapstructure:"max_ingest_body_mib"` // Maximum ingest request body in MiB (default 50).
 }
 

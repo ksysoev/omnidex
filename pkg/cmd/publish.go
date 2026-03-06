@@ -12,7 +12,7 @@ import (
 
 type publishFlags struct {
 	URL         string
-	APIKey      string //nolint:gosec // G117: field name matches secret pattern but this is a CLI flags struct holding the user-supplied API key value
+	APIKey      string
 	DocsPath    string
 	FilePattern string
 	Repo        string
