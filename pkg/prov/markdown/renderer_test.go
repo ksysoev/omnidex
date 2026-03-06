@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/ksysoev/omnidex/pkg/core"
@@ -531,4 +532,54 @@ func TestRenderer_RenderHTML_SanitizesOutput(t *testing.T) {
 	assert.Equal(t, []core.Heading{
 		{Level: 1, ID: "title", Text: "Title"},
 	}, headings)
+}
+
+func TestRenderer_ToHTML_ChromaHighlighting(t *testing.T) {
+	r := New()
+
+	// A language-tagged fenced block must produce Chroma markup.
+	input := "```go\npackage main\n```\n"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	// Chroma emits <pre class="chroma"><code>...</code></pre>
+	assert.Contains(t, html, `<pre class="chroma">`)
+	assert.Contains(t, html, `<code>`)
+	// Chroma emits token spans such as <span class="kn"> for keywords
+	assert.Contains(t, html, `<span class="`)
+}
+
+func TestRenderer_ToHTML_ChromaClassesSurviveSanitization(t *testing.T) {
+	r := New()
+
+	input := "```go\npackage main\n\nfunc main() {}\n```\n"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	// Wrapper classes must survive bluemonday sanitization.
+	assert.Contains(t, html, `class="chroma"`, "chroma wrapper class must survive sanitization")
+	assert.Contains(t, html, `class="line"`, "line wrapper class must survive sanitization")
+	// Token-level span classes (1-3 letter codes) must also survive.
+	// Use a regexp instead of a hard-coded class name since Chroma token classes
+	// may vary across versions or lexer updates.
+	tokenSpanPattern := regexp.MustCompile(`<span class="[a-z]{1,3}"`)
+	assert.Regexp(t, tokenSpanPattern, html, "token-level span class must survive sanitization")
+}
+
+func TestRenderer_ToHTML_PlainFencedBlockNotHighlighted(t *testing.T) {
+	r := New()
+
+	// A fenced block without a language tag must NOT produce Chroma markup.
+	input := "```\nplain text\n```\n"
+
+	result, err := r.ToHTML([]byte(input))
+	assert.NoError(t, err)
+
+	html := string(result)
+	assert.NotContains(t, html, `class="chroma"`)
+	assert.Contains(t, html, "plain text")
 }

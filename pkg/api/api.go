@@ -29,7 +29,7 @@ type API struct {
 // Config holds the configuration for the API server.
 type Config struct {
 	Listen           string   `mapstructure:"listen"`
-	APIKeys          []string `mapstructure:"api_keys"`            //nolint:gosec // This is a config struct, not a secret value
+	APIKeys          []string `mapstructure:"api_keys"`
 	MaxIngestBodyMiB int64    `mapstructure:"max_ingest_body_mib"` // Maximum ingest request body in MiB (default 50).
 }
 
@@ -87,7 +87,7 @@ func (a *API) Run(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 		defer cancel()
 
 		slog.WarnContext(ctx, "shutting down API server")

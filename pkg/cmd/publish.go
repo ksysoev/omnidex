@@ -12,7 +12,7 @@ import (
 
 type publishFlags struct {
 	URL         string
-	APIKey      string //nolint:gosec // Suppresses false positive on field name; value is a runtime-provided bearer token from CLI/env.
+	APIKey      string
 	DocsPath    string
 	FilePattern string
 	Repo        string

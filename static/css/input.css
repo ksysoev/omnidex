@@ -12,6 +12,8 @@
 .prose code { background-color: #f3f4f6; padding: 0.125em 0.25em; border-radius: 0.25em; font-size: 0.875em; }
 .prose pre { background-color: #1f2937; color: #f9fafb; padding: 1em; border-radius: 0.5em; overflow-x: auto; margin-bottom: 1em; }
 .prose pre code { background-color: transparent; padding: 0; }
+/* Chroma wraps highlighted code in <pre class="chroma"><code> — reset the inner code background */
+.prose pre.chroma code { background-color: transparent; color: inherit; display: block; }
 .prose pre.mermaid { background-color: transparent; color: inherit; text-align: center; padding: 1em 0; overflow-x: auto; position: relative; }
 .prose pre.mermaid svg { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 100%; }
 

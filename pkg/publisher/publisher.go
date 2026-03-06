@@ -287,7 +287,7 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 			// Use == ".." or HasPrefix("../") to avoid false-positives on paths
 			// like "..images/logo.png" that start with ".." but don't escape the root.
 			if resolved == ".." || strings.HasPrefix(resolved, "../") {
-				slog.Warn("skipping image reference outside docs directory", //nolint:gosec // ref is a structured log field value, not written to output
+				slog.Warn("skipping image reference outside docs directory",
 					"doc", docRelPath, "ref", ref, "resolved", resolved)
 
 				continue
@@ -300,9 +300,9 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 
 			absPath := filepath.Join(docsPath, filepath.FromSlash(resolved))
 
-			data, err := os.ReadFile(absPath) //nolint:gosec // path traversal is prevented by the resolved == ".." / HasPrefix("../") check above
+			data, err := os.ReadFile(absPath)
 			if err != nil {
-				slog.Warn("skipping unreadable image reference", //nolint:gosec // ref is a structured log field value, not written to output
+				slog.Warn("skipping unreadable image reference",
 					"doc", docRelPath, "ref", ref, "path", absPath, "error", err)
 
 				continue
@@ -336,7 +336,7 @@ func (p *Publisher) SendIngestRequest(ctx context.Context, req *core.IngestReque
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 
-	resp, err := p.httpClient.Do(httpReq) //nolint:gosec // URL is intentionally user-provided via CLI flag
+	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
