@@ -44,7 +44,7 @@ func runHealthCheck(ctx context.Context, baseURL string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: URL is supplied by the operator via CLI flag; SSRF is intentional for a health-check CLI tool
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}

@@ -287,7 +287,7 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 			// Use == ".." or HasPrefix("../") to avoid false-positives on paths
 			// like "..images/logo.png" that start with ".." but don't escape the root.
 			if resolved == ".." || strings.HasPrefix(resolved, "../") {
-				slog.Warn("skipping image reference outside docs directory",
+				slog.Warn("skipping image reference outside docs directory", //nolint:gosec // G706: log values are filesystem paths from WalkDir/user config, not attacker-controlled in this CLI context
 					"doc", docRelPath, "ref", ref, "resolved", resolved)
 
 				continue
@@ -300,9 +300,9 @@ func CollectAssets(docsPath string, docs map[string]string) (map[string][]byte, 
 
 			absPath := filepath.Join(docsPath, filepath.FromSlash(resolved))
 
-			data, err := os.ReadFile(absPath)
+			data, err := os.ReadFile(absPath) //nolint:gosec // G703: path traversal is guarded by the "../" check above; absPath is constructed from a validated relative path
 			if err != nil {
-				slog.Warn("skipping unreadable image reference",
+				slog.Warn("skipping unreadable image reference", //nolint:gosec // G706: log values are filesystem paths from WalkDir/user config, not attacker-controlled in this CLI context
 					"doc", docRelPath, "ref", ref, "path", absPath, "error", err)
 
 				continue
@@ -336,7 +336,7 @@ func (p *Publisher) SendIngestRequest(ctx context.Context, req *core.IngestReque
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := p.httpClient.Do(httpReq) //nolint:gosec // G704: URL is operator-supplied via CLI flag; SSRF is intentional for a publish CLI tool
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
