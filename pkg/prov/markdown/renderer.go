@@ -7,9 +7,11 @@ import (
 	"regexp"
 	"strings"
 
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/ksysoev/omnidex/pkg/core"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
@@ -20,6 +22,10 @@ import (
 
 // mermaidClassPattern matches the exact "mermaid" class value for bluemonday sanitization policy.
 var mermaidClassPattern = regexp.MustCompile(`^mermaid$`)
+
+// chromaClassPattern matches CSS class names emitted by the Chroma syntax highlighter.
+// Chroma emits short single-letter or prefixed class names on <span>, <code>, and <pre> elements.
+var chromaClassPattern = regexp.MustCompile(`^(chroma|bg|[a-z]{1,3})$`)
 
 // Renderer converts markdown content to HTML, extracts titles, and strips markdown to plain text.
 // HTML output is sanitized using bluemonday to prevent XSS attacks from user-submitted markdown.
@@ -40,12 +46,21 @@ func New() *Renderer {
 				RenderMode: gmm.RenderModeClient,
 				NoScript:   true,
 			},
+			highlighting.NewHighlighting(
+				highlighting.WithStyle("github-dark"),
+				highlighting.WithFormatOptions(
+					chromahtml.WithClasses(true),
+					chromahtml.WithAllClasses(true),
+				),
+			),
 		),
 	)
 
 	policy := bluemonday.UGCPolicy()
 	policy.AllowAttrs("class").Matching(mermaidClassPattern).OnElements("pre")
 	policy.AllowAttrs("id").OnElements("h1", "h2", "h3", "h4", "h5", "h6")
+	policy.AllowElements("span")
+	policy.AllowAttrs("class").Matching(chromaClassPattern).OnElements("span", "code", "pre")
 
 	return &Renderer{md: md, sanitize: policy}
 }
