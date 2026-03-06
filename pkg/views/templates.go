@@ -12,7 +12,7 @@ const layoutHeader = `<!DOCTYPE html>
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
         /* Chroma syntax highlighting — github-dark theme */
-        /* Background */ .bg { color: #e6edf3; background-color: #0d1117; }
+        /* Background */ .chroma .bg { color: #e6edf3; background-color: #0d1117; }
         /* PreWrapper */ .chroma { color: #e6edf3; background-color: #1f2937; -webkit-text-size-adjust: none; }
         /* Error */ .chroma .err { color: #f85149 }
         /* LineLink */ .chroma .lnlinks { outline: none; text-decoration: none; color: inherit }

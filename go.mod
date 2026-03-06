@@ -3,6 +3,7 @@ module github.com/ksysoev/omnidex
 go 1.24.4
 
 require (
+	github.com/alecthomas/chroma/v2 v2.23.1
 	github.com/blevesearch/bleve/v2 v2.5.7
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/getkin/kin-openapi v0.133.0
@@ -12,13 +13,13 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.7.16
+	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	go.abhg.dev/goldmark/mermaid v0.6.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/RoaringBitmap/roaring/v2 v2.4.5 // indirect
-	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
 	github.com/blevesearch/bleve_index_api v1.2.11 // indirect
@@ -65,7 +66,6 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
-	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc // indirect
 	go.etcd.io/bbolt v1.4.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.38.0 // indirect
