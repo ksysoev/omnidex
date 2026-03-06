@@ -39,7 +39,7 @@ func TestRun_GracefulShutdown(t *testing.T) {
 	api, err := New(cfg, svc, views)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(t.Context()) //nolint:gosec // G118: cancel is called in the goroutine below
+	ctx, cancel := context.WithCancel(t.Context())
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)

@@ -26,7 +26,10 @@ var mermaidClassPattern = regexp.MustCompile(`^mermaid$`)
 // chromaClassPattern matches CSS class names emitted by the Chroma syntax highlighter.
 // Chroma emits short 1-3 letter token classes (e.g. "k", "kn", "nf") on <span> elements,
 // and longer wrapper classes on <pre> and <code> elements ("chroma", "bg", "line", "lnt",
-// "ln", "hl", "lnlinks", "lntable", "lntd").
+// "ln", "hl", "lnlinks", "lntable", "lntd"). The [a-z]{1,3} catchall intentionally allows
+// any current and future Chroma token classes without maintaining an exhaustive list. This
+// is safe because the bluemonday policy only permits these classes on <span>, <code>, and
+// <pre> elements — scripts, event handlers, and inline styles are still stripped regardless.
 var chromaClassPattern = regexp.MustCompile(`^(chroma|bg|line|lnt|ln|hl|lnlinks|lntable|lntd|[a-z]{1,3})$`)
 
 // Renderer converts markdown content to HTML, extracts titles, and strips markdown to plain text.

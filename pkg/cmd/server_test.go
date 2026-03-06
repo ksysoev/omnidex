@@ -29,7 +29,7 @@ func TestRunCommand_Success(t *testing.T) {
 	t.Setenv("STORAGE_PATH", storagePath)
 	t.Setenv("SEARCH_INDEX_PATH", indexPath)
 
-	ctx, cancel := context.WithCancel(t.Context()) //nolint:gosec // G118: cancel is called in the goroutine below
+	ctx, cancel := context.WithCancel(t.Context())
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)

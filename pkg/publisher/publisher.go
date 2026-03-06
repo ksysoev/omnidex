@@ -127,7 +127,7 @@ func CollectFiles(docsPath, filePattern string) (map[string]string, error) {
 			return nil
 		}
 
-		content, err := os.ReadFile(path) //nolint:gosec // G122: path is the absolute path provided directly by fs.WalkDir, not re-resolved
+		content, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", path, err)
 		}

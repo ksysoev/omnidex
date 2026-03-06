@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/ksysoev/omnidex/pkg/core"
@@ -563,7 +564,10 @@ func TestRenderer_ToHTML_ChromaClassesSurviveSanitization(t *testing.T) {
 	assert.Contains(t, html, `class="chroma"`, "chroma wrapper class must survive sanitization")
 	assert.Contains(t, html, `class="line"`, "line wrapper class must survive sanitization")
 	// Token-level span classes (1-3 letter codes) must also survive.
-	assert.Contains(t, html, `class="cl"`, "cl span class must survive sanitization")
+	// Use a regexp instead of a hard-coded class name since Chroma token classes
+	// may vary across versions or lexer updates.
+	tokenSpanPattern := regexp.MustCompile(`<span class="[a-z]{1,3}"`)
+	assert.Regexp(t, tokenSpanPattern, html, "token-level span class must survive sanitization")
 }
 
 func TestRenderer_ToHTML_PlainFencedBlockNotHighlighted(t *testing.T) {
