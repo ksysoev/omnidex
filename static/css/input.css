@@ -52,7 +52,7 @@
 /* Chroma wraps highlighted code in <pre class="chroma"><code> — reset the inner code background */
 .prose pre.chroma code { background-color: transparent; color: inherit; display: block; }
 .prose pre.mermaid { background-color: transparent; color: inherit; text-align: center; padding: 1em 0; overflow-x: auto; position: relative; }
-.prose pre.mermaid svg { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 100%; }
+.prose pre.mermaid svg { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 100%; background: transparent !important; }
 
 /* Mermaid diagram expand button */
 .mermaid-expand-btn {
