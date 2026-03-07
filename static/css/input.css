@@ -1,3 +1,40 @@
+/* ========================================================================
+   CSS custom property token layer
+   Defines semantic colour tokens for light (default) and dark themes.
+   These are the single source of truth for the colour palette; components
+   that have migrated to use tokens will switch automatically on theme change.
+   ======================================================================== */
+
+/* Light (default) */
+:root {
+  --color-bg:             #f9fafb;   /* gray-50  */
+  --color-surface:        #ffffff;
+  --color-surface-2:      #f3f4f6;   /* gray-100 */
+  --color-border:         #e5e7eb;   /* gray-200 */
+  --color-text-primary:   #111827;   /* gray-900 */
+  --color-text-secondary: #374151;   /* gray-700 */
+  --color-text-muted:     #6b7280;   /* gray-500 */
+  --color-accent:         #2563eb;   /* blue-600 */
+  --color-accent-hover:   #1d4ed8;   /* blue-700 */
+  --color-accent-subtle:  #eff6ff;   /* blue-50  */
+  --color-accent-border:  #93c5fd;   /* blue-300 */
+}
+
+/* Dark overrides */
+[data-theme="dark"] {
+  --color-bg:             #030712;   /* gray-950 */
+  --color-surface:        #111827;   /* gray-900 */
+  --color-surface-2:      #1f2937;   /* gray-800 */
+  --color-border:         #374151;   /* gray-700 */
+  --color-text-primary:   #f9fafb;   /* gray-50  */
+  --color-text-secondary: #d1d5db;   /* gray-300 */
+  --color-text-muted:     #9ca3af;   /* gray-400 */
+  --color-accent:         #60a5fa;   /* blue-400 */
+  --color-accent-hover:   #93c5fd;   /* blue-300 */
+  --color-accent-subtle:  #1e3a5f;
+  --color-accent-border:  #3b82f6;   /* blue-500 */
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -287,4 +324,45 @@
 #scalar-api-reference {
   max-width: 100%;
   overflow: auto;
+}
+
+/* --- Color palette (dark mode) --- */
+[data-theme="dark"] #scalar-api-reference .dark-mode {
+  /* Text colors */
+  --scalar-color-1: #f9fafb;                    /* gray-50  — headings, primary text */
+  --scalar-color-2: rgba(209, 213, 219, 0.9);   /* gray-300 — body text */
+  --scalar-color-3: rgba(156, 163, 175, 0.8);   /* gray-400 — muted / tertiary */
+  --scalar-color-accent: #60a5fa;               /* blue-400 — links, accents */
+
+  /* Backgrounds */
+  --scalar-background-1: #111827;               /* gray-900 — primary surface */
+  --scalar-background-2: #1f2937;               /* gray-800 — secondary surface */
+  --scalar-background-3: #374151;               /* gray-700 — tertiary surface */
+  --scalar-background-accent: rgba(96, 165, 250, 0.08); /* blue-400 at 8% */
+
+  /* Borders */
+  --scalar-border-color: #374151;               /* gray-700 */
+
+  /* Buttons */
+  --scalar-button-1: #60a5fa;                   /* blue-400 — primary button */
+  --scalar-button-1-hover: #93c5fd;             /* blue-300 — primary button hover */
+  --scalar-button-1-color: #030712;             /* near-black text on light button */
+
+  /* Shadows */
+  --scalar-shadow-1: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --scalar-shadow-2: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 0 0 1px #374151;
+}
+
+[data-theme="dark"] #scalar-api-reference .dark-mode .sidebar {
+  --scalar-sidebar-background-1: #111827;
+  --scalar-sidebar-border-color: #374151;
+  --scalar-sidebar-color-1: #f9fafb;
+  --scalar-sidebar-color-2: #d1d5db;
+  --scalar-sidebar-color-active: #60a5fa;
+  --scalar-sidebar-item-hover-background: #1f2937;
+  --scalar-sidebar-item-hover-color: #f9fafb;
+  --scalar-sidebar-item-active-background: #1e3a5f;
+  --scalar-sidebar-search-background: #1f2937;
+  --scalar-sidebar-search-border-color: #374151;
+  --scalar-sidebar-search-color: #9ca3af;
 }

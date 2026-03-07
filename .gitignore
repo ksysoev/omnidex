@@ -37,3 +37,8 @@ data/
 
 # Generated CSS (built from Tailwind)
 static/css/style.css
+
+# Node.js (used only for local Tailwind builds when standalone binary unavailable)
+node_modules/
+package.json
+package-lock.json

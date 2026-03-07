@@ -7,6 +7,14 @@ const layoutHeader = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Omnidex - Documentation Portal</title>
+    <!-- FOUC prevention: apply stored or system theme before any paint -->
+    <script>
+    (function(){
+        var s=localStorage.getItem('theme');
+        if(s==='dark'||s==='light'){document.documentElement.setAttribute('data-theme',s);}
+        else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','dark');}
+    })();
+    </script>
     <script src="/static/js/htmx.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11.12.3/dist/mermaid.min.js" integrity="sha384-jFhLSLFn4m565eRAS0CDMWubMqOtfZWWbE8kqgGdU+VHbJ3B2G/4X8u+0BM8MtdU" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="/static/css/style.css">
@@ -91,27 +99,54 @@ const layoutHeader = `<!DOCTYPE html>
         /* TextWhitespace */ .chroma .w { color: #6e7681 }
     </style>
     <script>
+        /* ================================================================
+           Theme helpers
+           ================================================================ */
+        function getMermaidThemeVars(dark) {
+            if (dark) {
+                return {
+                    background: '#111827',
+                    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+                    primaryColor: '#1e3a5f',
+                    primaryBorderColor: '#3b82f6',
+                    primaryTextColor: '#e0f2fe',
+                    secondaryColor: '#1f2937',
+                    secondaryBorderColor: '#374151',
+                    tertiaryColor: '#111827',
+                    tertiaryBorderColor: '#374151',
+                    lineColor: '#6b7280',
+                    textColor: '#d1d5db',
+                    noteBkgColor: '#1e3a5f',
+                    noteBorderColor: '#3b82f6',
+                    actorBkg: '#1f2937',
+                    actorBorder: '#374151'
+                };
+            }
+            return {
+                background: '#f9fafb',
+                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+                primaryColor: '#eff6ff',
+                primaryBorderColor: '#93c5fd',
+                primaryTextColor: '#1e3a5f',
+                secondaryColor: '#f3f4f6',
+                secondaryBorderColor: '#d1d5db',
+                tertiaryColor: '#f9fafb',
+                tertiaryBorderColor: '#e5e7eb',
+                lineColor: '#9ca3af',
+                textColor: '#374151',
+                noteBkgColor: '#eff6ff',
+                noteBorderColor: '#93c5fd',
+                actorBkg: '#ffffff',
+                actorBorder: '#d1d5db'
+            };
+        }
+
         if (typeof mermaid !== 'undefined') {
+            var _mermaidDark = document.documentElement.getAttribute('data-theme') === 'dark';
             mermaid.initialize({
                 startOnLoad: false,
                 theme: 'base',
-                themeVariables: {
-                    background: '#f9fafb',
-                    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-                    primaryColor: '#eff6ff',
-                    primaryBorderColor: '#93c5fd',
-                    primaryTextColor: '#1e3a5f',
-                    secondaryColor: '#f3f4f6',
-                    secondaryBorderColor: '#d1d5db',
-                    tertiaryColor: '#f9fafb',
-                    tertiaryBorderColor: '#e5e7eb',
-                    lineColor: '#9ca3af',
-                    textColor: '#374151',
-                    noteBkgColor: '#eff6ff',
-                    noteBorderColor: '#93c5fd',
-                    actorBkg: '#ffffff',
-                    actorBorder: '#d1d5db'
-                }
+                themeVariables: getMermaidThemeVars(_mermaidDark)
             });
         }
         function scrollToHash() {
@@ -217,8 +252,9 @@ const layoutHeader = `<!DOCTYPE html>
             });
         }
         document.addEventListener('DOMContentLoaded', function() {
-            initScrollSpy(); scrollToHash(); initHeadingAnchors();
+            initScrollSpy(); scrollToHash(); initHeadingAnchors(); initThemeToggle();
             if (typeof mermaid !== 'undefined') {
+                saveMermaidSources(document);
                 mermaid.run().then(initMermaidExpand).catch(function(e) {
                     console.error('Mermaid rendering failed:', e);
                     initMermaidExpand();
@@ -232,6 +268,7 @@ const layoutHeader = `<!DOCTYPE html>
             initHeadingAnchors();
             if (typeof mermaid !== 'undefined') {
                 var target = event.detail.elt;
+                saveMermaidSources(target);
                 var nodes = target.querySelectorAll('.mermaid:not([data-processed])');
                 if (nodes.length > 0) {
                     mermaid.run({nodes: Array.from(nodes)})
@@ -586,6 +623,60 @@ const layoutHeader = `<!DOCTYPE html>
             };
         }());
 
+        function initThemeToggle() {
+            var btn = document.getElementById('theme-toggle');
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+                var html = document.documentElement;
+                var isDark = html.getAttribute('data-theme') === 'dark';
+                var next = isDark ? 'light' : 'dark';
+                html.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                // Notify other subsystems (Mermaid, Scalar) via a custom event.
+                window.dispatchEvent(new CustomEvent('omnidex:themechange', { detail: { theme: next } }));
+            });
+        }
+
+        /* Stash Mermaid source text before rendering so we can re-render on theme change */
+        function saveMermaidSources(root) {
+            var pres = root.querySelectorAll('.prose pre.mermaid:not([data-mermaid-source])');
+            pres.forEach(function(pre) {
+                pre.setAttribute('data-mermaid-source', pre.textContent);
+            });
+        }
+
+        /* Re-initialize Mermaid diagrams when the theme changes */
+        window.addEventListener('omnidex:themechange', function(e) {
+            if (typeof mermaid === 'undefined') return;
+            var dark = e.detail && e.detail.theme === 'dark';
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'base',
+                themeVariables: getMermaidThemeVars(dark)
+            });
+            // Re-render all diagrams that have already been processed.
+            var diagrams = document.querySelectorAll('.prose pre.mermaid svg');
+            var pres = [];
+            diagrams.forEach(function(svg) {
+                var pre = svg.closest('pre.mermaid');
+                if (pre) {
+                    // Remove the processed marker and restore original source so
+                    // Mermaid can re-render the diagram with the new theme.
+                    var source = pre.getAttribute('data-mermaid-source');
+                    if (source) {
+                        pre.removeAttribute('data-processed');
+                        pre.innerHTML = source;
+                        pres.push(pre);
+                    }
+                }
+            });
+            if (pres.length > 0) {
+                mermaid.run({ nodes: pres })
+                    .then(initMermaidExpand)
+                    .catch(function(err) { console.error('Mermaid re-render failed:', err); initMermaidExpand(); });
+            }
+        });
+
         function initMermaidExpand() {
             var containers = document.querySelectorAll('.prose pre.mermaid');
             containers.forEach(function(pre) {
@@ -644,8 +735,15 @@ const layoutHeader = `<!DOCTYPE html>
             </a>
             <div class="flex items-center gap-4">
                 <input type="search" name="q" placeholder="Search documentation..."
-                    class="w-64 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-64 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                     hx-get="/search" hx-trigger="keyup changed delay:300ms" hx-target="#main-content" hx-push-url="true">
+                <button id="theme-toggle" aria-label="Toggle dark mode"
+                    class="p-2 rounded-lg border border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 dark:border-gray-700 dark:text-gray-400 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors flex-shrink-0">
+                    <!-- Sun icon: shown in dark mode -->
+                    <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden dark:block" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    <!-- Moon icon: shown in light mode -->
+                    <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="block dark:hidden" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
             </div>
         </div>
     </nav>
