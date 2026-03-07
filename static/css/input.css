@@ -399,7 +399,9 @@
 }
 
 /* --- Scalar color palette (dark mode overrides for Omnidex) --- */
-[data-theme="dark"] #scalar-api-reference .dark-mode {
+/* Use html[data-theme="dark"] (element + attr) to prevent Tailwind v3 from
+   collapsing these into the unguarded #scalar-api-reference blocks above. */
+html[data-theme="dark"] #scalar-api-reference .dark-mode {
   /* Text colors */
   --scalar-color-1: #f9fafb;                    /* gray-50  — headings, primary text */
   --scalar-color-2: rgba(209, 213, 219, 0.9);   /* gray-300 — body text */
@@ -409,7 +411,7 @@
   /* Backgrounds */
   --scalar-background-1: #111827;               /* gray-900 — primary surface */
   --scalar-background-2: #1f2937;               /* gray-800 — secondary surface */
-  --scalar-background-3: #374151;               /* gray-700 — tertiary surface */
+  --scalar-background-3: #374151;               /* gray-700 — tertiary surface (code blocks, badges) */
   --scalar-background-accent: rgba(96, 165, 250, 0.08); /* blue-400 at 8% */
 
   /* Borders */
@@ -425,7 +427,7 @@
   --scalar-shadow-2: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 0 0 1px #374151;
 }
 
-[data-theme="dark"] #scalar-api-reference .dark-mode .sidebar {
+html[data-theme="dark"] #scalar-api-reference .dark-mode .sidebar {
   --scalar-sidebar-background-1: #111827;
   --scalar-sidebar-border-color: #374151;
   --scalar-sidebar-color-1: #f9fafb;

@@ -975,7 +975,7 @@ const openapiDocContentBody = `
                 View source
             </a>
         </div>
-        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
             <div id="scalar-api-reference"></div>
             <script type="application/json" id="openapi-spec">{{safeJS .HTML}}</script>
             <script>
