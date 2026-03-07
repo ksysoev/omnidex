@@ -10,9 +10,17 @@ const layoutHeader = `<!DOCTYPE html>
     <!-- FOUC prevention: apply stored or system theme before any paint -->
     <script>
     (function(){
-        var s=localStorage.getItem('theme');
-        if(s==='dark'||s==='light'){document.documentElement.setAttribute('data-theme',s);}
-        else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','dark');}
+        var s = null;
+        try {
+            s = window.localStorage ? window.localStorage.getItem('theme') : null;
+        } catch (e) {
+            s = null;
+        }
+        if (s === 'dark' || s === 'light') {
+            document.documentElement.setAttribute('data-theme', s);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
     })();
     </script>
     <script src="/static/js/htmx.min.js"></script>
@@ -631,7 +639,11 @@ const layoutHeader = `<!DOCTYPE html>
                 var isDark = html.getAttribute('data-theme') === 'dark';
                 var next = isDark ? 'light' : 'dark';
                 html.setAttribute('data-theme', next);
-                localStorage.setItem('theme', next);
+                try {
+                    localStorage.setItem('theme', next);
+                } catch (e) {
+                    // Ignore storage failures; theme toggle still works without persistence.
+                }
                 // Notify other subsystems (Mermaid, Scalar) via a custom event.
                 window.dispatchEvent(new CustomEvent('omnidex:themechange', { detail: { theme: next } }));
             });
@@ -665,7 +677,7 @@ const layoutHeader = `<!DOCTYPE html>
                     var source = pre.getAttribute('data-mermaid-source');
                     if (source) {
                         pre.removeAttribute('data-processed');
-                        pre.innerHTML = source;
+                        pre.textContent = source;
                         pres.push(pre);
                     }
                 }
@@ -727,10 +739,10 @@ const layoutHeader = `<!DOCTYPE html>
         }
     </script>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
-    <nav class="bg-white border-b border-gray-200 px-6 py-3">
+<body class="bg-gray-50 dark:bg-gray-950 min-h-screen flex flex-col">
+    <nav class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <a href="/" class="text-xl font-bold text-gray-900" hx-get="/" hx-target="#main-content" hx-push-url="true">
+            <a href="/" class="text-xl font-bold text-gray-900 dark:text-gray-100" hx-get="/" hx-target="#main-content" hx-push-url="true">
                 Omnidex
             </a>
             <div class="flex items-center gap-4">
@@ -751,7 +763,7 @@ const layoutHeader = `<!DOCTYPE html>
 
 // layoutFooter is the closing portion of the HTML layout.
 const layoutFooter = `</main>
-    <footer class="border-t border-gray-200 py-6 text-center text-sm text-gray-500">
+    <footer class="border-t border-gray-200 dark:border-gray-700 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
         <p>Powered by Omnidex</p>
     </footer>
 
@@ -782,15 +794,15 @@ const layoutFooter = `</main>
 // homeContentBody is the home page content template.
 const homeContentBody = `
 <div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">Documentation Portal</h1>
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6">Documentation Portal</h1>
     {{if .Repos}}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {{range .Repos}}
         <a href="/docs/{{.Name}}/"
            hx-get="/docs/{{.Name}}/" hx-target="#main-content" hx-push-url="true"
-           class="block p-6 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all">
-            <h2 class="text-lg font-semibold text-gray-900 mb-2">{{.Name}}</h2>
-            <div class="flex items-center gap-4 text-sm text-gray-500">
+           class="block p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{{.Name}}</h2>
+            <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                 <span>{{.DocCount}} documents</span>
                 <span>Updated {{.LastUpdated.Format "Jan 02, 2006"}}</span>
             </div>
@@ -799,8 +811,8 @@ const homeContentBody = `
     </div>
     {{else}}
     <div class="text-center py-16">
-        <p class="text-gray-500 text-lg mb-4">No repositories indexed yet.</p>
-        <p class="text-gray-400">Configure the Omnidex GitHub Action in your repositories to get started.</p>
+        <p class="text-gray-500 dark:text-gray-400 text-lg mb-4">No repositories indexed yet.</p>
+        <p class="text-gray-400 dark:text-gray-500">Configure the Omnidex GitHub Action in your repositories to get started.</p>
     </div>
     {{end}}
 </div>`
@@ -810,10 +822,10 @@ const docContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                 <a href="/docs/{{.Doc.Repo}}/"
                    hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
-                   class="block hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+                   class="block hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{{.Doc.Repo}}</a>
             </h3>
             <ul class="space-y-1">
                 {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
@@ -821,33 +833,33 @@ const docContentBody = `
         </nav>
     </aside>
     <article id="doc-content" class="flex-1 min-w-0">
-        <div class="mb-4 text-sm text-gray-500 flex items-center justify-between">
+        <div class="mb-4 text-sm text-gray-500 dark:text-gray-400 flex items-center justify-between">
             <div>
-                <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+                <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600 dark:hover:text-blue-400">Home</a>
                 <span class="mx-1">/</span>
-                <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
+                <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600 dark:hover:text-blue-400">{{.Doc.Repo}}</a>
                 <span class="mx-1">/</span>
                 <span>{{.Doc.Path}}</span>
             </div>
             <a href="{{githubURL .Doc.Repo .Doc.Path .Doc.CommitSHA}}" target="_blank" rel="noopener noreferrer"
-               class="inline-flex items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors">
+               class="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 View source
             </a>
         </div>
-        <div class="prose prose-gray max-w-none bg-white rounded-lg border border-gray-200 p-8">
+        <div class="prose prose-gray dark:prose-invert max-w-none bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8">
             {{html .HTML}}
         </div>
     </article>
     {{if gt (len .Headings) 1}}
     <aside class="w-56 flex-shrink-0 hidden lg:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">On this page</h3>
-            <ul class="space-y-1 border-l border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">On this page</h3>
+            <ul class="space-y-1 border-l border-gray-200 dark:border-gray-700">
                 {{range .Headings}}
                 <li>
                     <a href="#{{.ID}}" data-toc-link="{{.ID}}"
-                       class="toc-link block py-1 text-sm text-gray-500 hover:text-gray-900 border-l-2 border-transparent hover:border-gray-400 -ml-px {{tocIndent .Level}}">
+                       class="toc-link block py-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border-l-2 border-transparent hover:border-gray-400 dark:hover:border-gray-500 -ml-px {{tocIndent .Level}}">
                         {{.Text}}
                     </a>
                 </li>
@@ -861,13 +873,13 @@ const docContentBody = `
 // searchContentBody is the search page content template.
 const searchContentBody = `
 <div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">Search Documentation</h1>
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6">Search Documentation</h1>
     <div id="search-results">` + searchResultsBody + `</div>
 </div>`
 
 // searchResultsBody is the search results partial template.
 const searchResultsBody = `{{if .Results}}
-    <p class="text-sm text-gray-500 mb-4">{{.Results.Total}} results found</p>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{.Results.Total}} results found</p>
     {{if .Results.Hits}}
     <style>
     .search-result mark { background-color: #dbeafe; color: #1e3a8a; border-radius: 2px; padding: 0 2px; }
@@ -875,8 +887,8 @@ const searchResultsBody = `{{if .Results}}
     <div class="space-y-4">
         {{range .Results.Hits}}
         <a href="/docs/{{.Repo}}/{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}" hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="/docs/{{.Repo}}/{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}"
-           class="search-result block p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all">
-            <h3 class="text-lg font-semibold text-gray-900 mb-1">
+           class="search-result block p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-sm transition-all">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
                 {{- if .TitleFragments -}}
                     {{- range $i, $f := .TitleFragments -}}
                         {{- if $i}}<span class="text-gray-300 mx-1">&hellip;</span>{{end -}}
@@ -886,46 +898,46 @@ const searchResultsBody = `{{if .Results}}
                     {{.Title}}
                 {{- end -}}
             </h3>
-            <p class="text-xs text-gray-400 mb-2">{{.Repo}}/{{.Path}}</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">{{.Repo}}/{{.Path}}</p>
             {{if .ContentFragments}}
-            <p class="text-sm text-gray-600 leading-relaxed">
+            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
                 {{- range $i, $f := .ContentFragments -}}
                     {{- if $i}}<span class="text-gray-300 mx-1">&hellip;</span>{{end -}}
                     {{safeFragment $f}}
                 {{- end -}}
             </p>
             {{else if .TitleFragments}}
-            <p class="text-xs text-gray-400 italic">Matched in title</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500 italic">Matched in title</p>
             {{end}}
         </a>
         {{end}}
     </div>
     {{else}}
-    <p class="text-gray-500">No results found for &ldquo;{{$.Query}}&rdquo;.</p>
+    <p class="text-gray-500 dark:text-gray-400">No results found for &ldquo;{{$.Query}}&rdquo;.</p>
     {{end}}
 {{else if .Query}}
-    <p class="text-gray-500">No results found for &ldquo;{{.Query}}&rdquo;.</p>
+    <p class="text-gray-500 dark:text-gray-400">No results found for &ldquo;{{.Query}}&rdquo;.</p>
 {{else}}
-    <p class="text-gray-400">Enter a search query above to find documentation.</p>
+    <p class="text-gray-400 dark:text-gray-500">Enter a search query above to find documentation.</p>
 {{end}}`
 
 // repoIndexContentBody is the repo index page content template.
 const repoIndexContentBody = `
 <div>
-    <div class="mb-4 text-sm text-gray-500">
-        <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+    <div class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+        <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600 dark:hover:text-blue-400">Home</a>
         <span class="mx-1">/</span>
         <span>{{.Repo}}</span>
     </div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">{{.Repo}}</h1>
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6">{{.Repo}}</h1>
     {{if .Docs}}
     <div class="space-y-1">
         {{template "repoDocTree" .Docs}}
     </div>
     {{else}}
     <div class="text-center py-16">
-        <p class="text-gray-500 text-lg mb-4">No documents in this repository yet.</p>
-        <p class="text-gray-400">Publish documentation using the Omnidex GitHub Action to get started.</p>
+        <p class="text-gray-500 dark:text-gray-400 text-lg mb-4">No documents in this repository yet.</p>
+        <p class="text-gray-400 dark:text-gray-500">Publish documentation using the Omnidex GitHub Action to get started.</p>
     </div>
     {{end}}
 </div>`
@@ -937,10 +949,10 @@ const openapiDocContentBody = `
 <div class="flex gap-8">
     <aside class="w-64 flex-shrink-0 hidden md:block">
         <nav class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                 <a href="/docs/{{.Doc.Repo}}/"
                    hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true"
-                   class="block hover:text-blue-600 transition-colors">{{.Doc.Repo}}</a>
+                   class="block hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{{.Doc.Repo}}</a>
             </h3>
             <ul class="space-y-1">
                 {{template "sidebarDocTree" (sidebarNav .NavDocs .CurrentPath)}}
@@ -948,21 +960,21 @@ const openapiDocContentBody = `
         </nav>
     </aside>
     <article id="doc-content" class="flex-1 min-w-0">
-        <div class="mb-4 text-sm text-gray-500 flex items-center justify-between">
+        <div class="mb-4 text-sm text-gray-500 dark:text-gray-400 flex items-center justify-between">
             <div>
-                <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">Home</a>
+                <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600 dark:hover:text-blue-400">Home</a>
                 <span class="mx-1">/</span>
-                <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600">{{.Doc.Repo}}</a>
+                <a href="/docs/{{.Doc.Repo}}/" hx-get="/docs/{{.Doc.Repo}}/" hx-target="#main-content" hx-push-url="true" class="hover:text-blue-600 dark:hover:text-blue-400">{{.Doc.Repo}}</a>
                 <span class="mx-1">/</span>
                 <span>{{.Doc.Path}}</span>
             </div>
             <a href="{{githubURL .Doc.Repo .Doc.Path .Doc.CommitSHA}}" target="_blank" rel="noopener noreferrer"
-               class="inline-flex items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors">
+               class="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 View source
             </a>
         </div>
-        <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
             <div id="scalar-api-reference"></div>
             <script type="application/json" id="openapi-spec">{{safeJS .HTML}}</script>
             <script>
@@ -977,7 +989,7 @@ const openapiDocContentBody = `
                     return;
                 }
 
-                function initScalar() {
+                function initScalar(darkModeState) {
                     if (typeof window.Scalar === 'undefined' || typeof window.Scalar.createApiReference !== 'function') return;
                     var container = document.getElementById('scalar-api-reference');
                     if (!container) return;
@@ -987,7 +999,7 @@ const openapiDocContentBody = `
                         theme: 'none',
                         layout: 'modern',
                         withDefaultFonts: false,
-                        forceDarkModeState: 'light',
+                        forceDarkModeState: darkModeState || 'light',
                         hideDarkModeToggle: true,
                         showSidebar: false,
                         hideSearch: true,
@@ -998,17 +1010,24 @@ const openapiDocContentBody = `
                     });
                 }
 
+                // Re-initialize Scalar when the app theme changes.
+                window.addEventListener('omnidex:themechange', function(e) {
+                    var dark = e.detail && e.detail.theme === 'dark';
+                    initScalar(dark ? 'dark' : 'light');
+                });
+
+                var _initialDark = document.documentElement.getAttribute('data-theme') === 'dark';
                 if (typeof window.Scalar !== 'undefined' && typeof window.Scalar.createApiReference === 'function') {
-                    initScalar();
+                    initScalar(_initialDark ? 'dark' : 'light');
                     return;
                 }
 
                 var existingScript = document.querySelector('script[data-scalar-api-reference]');
                 if (existingScript) {
                     if (existingScript.dataset.loaded === 'true') {
-                        initScalar();
+                        initScalar(_initialDark ? 'dark' : 'light');
                     } else {
-                        existingScript.addEventListener('load', initScalar);
+                        existingScript.addEventListener('load', function() { initScalar(_initialDark ? 'dark' : 'light'); });
                     }
                     return;
                 }
@@ -1021,7 +1040,7 @@ const openapiDocContentBody = `
                 script.setAttribute('data-scalar-api-reference', 'true');
                 script.onload = function() {
                     script.dataset.loaded = 'true';
-                    initScalar();
+                    initScalar(_initialDark ? 'dark' : 'light');
                 };
                 document.head.appendChild(script);
             })();
@@ -1033,8 +1052,8 @@ const openapiDocContentBody = `
 // notFoundBody is the 404 page content template.
 const notFoundBody = `
 <div class="text-center py-16">
-    <h1 class="text-4xl font-bold text-gray-900 mb-4">404 - Not Found</h1>
-    <p class="text-gray-500 mb-8">The page you are looking for does not exist.</p>
+    <h1 class="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">404 - Not Found</h1>
+    <p class="text-gray-500 dark:text-gray-400 mb-8">The page you are looking for does not exist.</p>
     <a href="/" hx-get="/" hx-target="#main-content" hx-push-url="true"
        class="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
         Go Home
@@ -1050,17 +1069,17 @@ const repoDocTreeSubTemplate = `{{define "repoDocTree"}}
 {{if .Doc}}
 <a href="/docs/{{.Doc.Repo}}/{{.Doc.Path}}"
    hx-get="/docs/{{.Doc.Repo}}/{{.Doc.Path}}" hx-target="#main-content" hx-push-url="true"
-   class="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-sm transition-all mb-2">
-    <h2 class="text-lg font-semibold text-gray-900">{{.Doc.Title}}</h2>
-    <span class="text-sm text-gray-500 shrink-0 ml-4">Updated {{.Doc.UpdatedAt.Format "Jan 02, 2006"}}</span>
+   class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-sm transition-all mb-2">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{.Doc.Title}}</h2>
+    <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0 ml-4">Updated {{.Doc.UpdatedAt.Format "Jan 02, 2006"}}</span>
 </a>
 {{else}}
 <div class="mt-4 mb-1">
-    <div class="flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-gray-500">
+    <div class="flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-gray-500 dark:text-gray-400">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         {{.Name}}
     </div>
-    <div class="pl-4 border-l border-gray-200 ml-2">
+    <div class="pl-4 border-l border-gray-200 dark:border-gray-700 ml-2">
         {{template "repoDocTree" .Children}}
     </div>
 </div>
@@ -1078,17 +1097,17 @@ const sidebarDocTreeSubTemplate = `{{define "sidebarDocTree"}}
 <li>
     <a href="/docs/{{.Doc.Repo}}/{{.Doc.Path}}"
        hx-get="/docs/{{.Doc.Repo}}/{{.Doc.Path}}" hx-target="#main-content" hx-push-url="true"
-       class="block px-3 py-1.5 text-sm rounded-md {{if eq .Doc.Path $.CurrentPath}}bg-blue-50 text-blue-700 font-medium{{else}}text-gray-700 hover:bg-gray-100 hover:text-gray-900{{end}}">
+       class="block px-3 py-1.5 text-sm rounded-md {{if eq .Doc.Path $.CurrentPath}}bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100{{end}}">
         {{.Doc.Title}}
     </a>
 </li>
 {{else}}
 <li class="mt-2">
-    <div class="flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-500">
+    <div class="flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-500 dark:text-gray-400">
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         {{.Name}}
     </div>
-    <ul class="pl-1 border-l border-gray-200 ml-1 space-y-1">
+    <ul class="pl-1 border-l border-gray-200 dark:border-gray-700 ml-1 space-y-1">
         {{template "sidebarDocTree" (sidebarChildren .Children $.CurrentPath)}}
     </ul>
 </li>

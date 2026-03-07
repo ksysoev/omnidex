@@ -261,7 +261,7 @@
    with the gray/blue palette used across the rest of the portal.
    ======================================================================== */
 
-/* --- Color palette (light mode only — Omnidex has no dark mode) --- */
+/* --- Scalar color palette (light mode overrides for Omnidex) --- */
 #scalar-api-reference .light-mode {
   /* Text colors */
   --scalar-color-1: #111827;           /* gray-900  — headings, primary text */
