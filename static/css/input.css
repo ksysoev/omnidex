@@ -255,6 +255,78 @@
   .prose .heading-anchor { opacity: 1; pointer-events: auto; }
 }
 
+/* Search result highlight */
+.search-result mark { background-color: #dbeafe; color: #1e3a8a; border-radius: 2px; padding: 0 2px; }
+
+/* ========================================================================
+   Dark mode overrides for custom (non-Tailwind) CSS
+   All rules below activate when [data-theme="dark"] is set on <html>.
+   ======================================================================== */
+
+/* --- Prose typography --- */
+[data-theme="dark"] .prose h2 { border-bottom-color: #374151; }
+[data-theme="dark"] .prose a { color: #60a5fa; }
+[data-theme="dark"] .prose a:hover { color: #93c5fd; }
+[data-theme="dark"] .prose :not(pre) > code { background-color: #1f2937; color: #f9fafb; }
+[data-theme="dark"] .prose blockquote { border-left-color: #374151; color: #9ca3af; }
+[data-theme="dark"] .prose th { background-color: #1f2937; }
+[data-theme="dark"] .prose th,
+[data-theme="dark"] .prose td { border-color: #374151; }
+[data-theme="dark"] .prose del { color: #9ca3af; }
+[data-theme="dark"] .prose hr { border-top-color: #374151; }
+
+/* --- TOC active state --- */
+[data-theme="dark"] .toc-link.toc-active { color: #60a5fa; border-left-color: #3b82f6; }
+
+/* --- Heading anchors --- */
+[data-theme="dark"] .prose .heading-anchor { color: #6b7280; }
+[data-theme="dark"] .prose .heading-anchor:hover,
+[data-theme="dark"] .prose .heading-anchor:focus,
+[data-theme="dark"] .prose .heading-anchor:focus-visible { color: #60a5fa; }
+[data-theme="dark"] .prose .heading-anchor.copied { color: #34d399; } /* emerald-400 */
+
+/* --- Mermaid expand button --- */
+[data-theme="dark"] .mermaid-expand-btn {
+  background-color: rgba(17, 24, 39, 0.85); /* gray-900 at 85% */
+  border-color: #374151;
+  color: #9ca3af;
+}
+[data-theme="dark"] .mermaid-expand-btn:hover,
+[data-theme="dark"] .mermaid-expand-btn:focus,
+[data-theme="dark"] .mermaid-expand-btn:focus-visible {
+  background-color: #1e3a5f;
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+/* --- Image expand button --- */
+[data-theme="dark"] .img-expand-btn {
+  background-color: rgba(17, 24, 39, 0.85);
+  border-color: #374151;
+  color: #9ca3af;
+}
+[data-theme="dark"] .img-expand-btn:hover,
+[data-theme="dark"] .img-expand-btn:focus,
+[data-theme="dark"] .img-expand-btn:focus-visible {
+  background-color: #1e3a5f;
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+/* --- Media fullscreen modal --- */
+[data-theme="dark"] #media-modal { background-color: #030712; }
+[data-theme="dark"] #media-modal-header,
+[data-theme="dark"] #media-modal-controls { background-color: #111827; border-color: #374151; }
+[data-theme="dark"] #media-modal-close,
+[data-theme="dark"] .media-ctrl-btn { background-color: #111827; border-color: #374151; color: #d1d5db; }
+[data-theme="dark"] #media-modal-close:hover,
+[data-theme="dark"] .media-ctrl-btn:hover { background-color: #1e3a5f; border-color: #3b82f6; color: #60a5fa; }
+[data-theme="dark"] #media-modal-viewport { background-color: #030712; }
+[data-theme="dark"] #media-zoom-level { color: #9ca3af; }
+
+/* --- Search result mark highlight --- */
+[data-theme="dark"] .search-result mark { background-color: #1e3a5f; color: #93c5fd; }
+
 /* ========================================================================
    Scalar API Reference — match Omnidex design language
    Scalar uses CSS custom properties for theming. We override them to align
