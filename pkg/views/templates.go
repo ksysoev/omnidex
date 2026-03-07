@@ -885,9 +885,6 @@ const searchContentBody = `
 const searchResultsBody = `{{if .Results}}
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{.Results.Total}} results found</p>
     {{if .Results.Hits}}
-    <style>
-    .search-result mark { background-color: #dbeafe; color: #1e3a8a; border-radius: 2px; padding: 0 2px; }
-    </style>
     <div class="space-y-4">
         {{range .Results.Hits}}
         <a href="/docs/{{.Repo}}/{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}" hx-get="/docs/{{.Repo}}/{{.Path}}" hx-target="#main-content" hx-push-url="/docs/{{.Repo}}/{{.Path}}{{if .Anchor}}#{{.Anchor}}{{end}}"
