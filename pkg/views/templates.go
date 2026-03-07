@@ -749,7 +749,7 @@ const layoutHeader = `<!DOCTYPE html>
                 <input type="search" name="q" placeholder="Search documentation..."
                     class="w-64 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                     hx-get="/search" hx-trigger="keyup changed delay:300ms" hx-target="#main-content" hx-push-url="true">
-                <button id="theme-toggle" aria-label="Toggle dark mode"
+                <button id="theme-toggle" type="button" aria-label="Toggle dark mode"
                     class="p-2 rounded-lg border border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 dark:border-gray-700 dark:text-gray-400 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors flex-shrink-0">
                     <!-- Sun icon: shown in dark mode -->
                     <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden dark:block" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -1011,10 +1011,14 @@ const openapiDocContentBody = `
                 }
 
                 // Re-initialize Scalar when the app theme changes.
-                window.addEventListener('omnidex:themechange', function(e) {
-                    var dark = e.detail && e.detail.theme === 'dark';
-                    initScalar(dark ? 'dark' : 'light');
-                });
+                // Guard against duplicate registration on HTMX partial re-renders.
+                if (!window.__scalarThemeListenerInstalled) {
+                    window.__scalarThemeListenerInstalled = true;
+                    window.addEventListener('omnidex:themechange', function(e) {
+                        var dark = e.detail && e.detail.theme === 'dark';
+                        initScalar(dark ? 'dark' : 'light');
+                    });
+                }
 
                 var _initialDark = document.documentElement.getAttribute('data-theme') === 'dark';
                 if (typeof window.Scalar !== 'undefined' && typeof window.Scalar.createApiReference === 'function') {
@@ -1027,7 +1031,10 @@ const openapiDocContentBody = `
                     if (existingScript.dataset.loaded === 'true') {
                         initScalar(_initialDark ? 'dark' : 'light');
                     } else {
-                        existingScript.addEventListener('load', function() { initScalar(_initialDark ? 'dark' : 'light'); });
+                        existingScript.addEventListener('load', function() {
+                            var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                            initScalar(dark ? 'dark' : 'light');
+                        });
                     }
                     return;
                 }
@@ -1040,7 +1047,8 @@ const openapiDocContentBody = `
                 script.setAttribute('data-scalar-api-reference', 'true');
                 script.onload = function() {
                     script.dataset.loaded = 'true';
-                    initScalar(_initialDark ? 'dark' : 'light');
+                    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    initScalar(dark ? 'dark' : 'light');
                 };
                 document.head.appendChild(script);
             })();

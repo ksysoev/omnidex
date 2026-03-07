@@ -326,7 +326,7 @@
   overflow: auto;
 }
 
-/* --- Color palette (dark mode) --- */
+/* --- Scalar color palette (dark mode overrides for Omnidex) --- */
 [data-theme="dark"] #scalar-api-reference .dark-mode {
   /* Text colors */
   --scalar-color-1: #f9fafb;                    /* gray-50  — headings, primary text */
