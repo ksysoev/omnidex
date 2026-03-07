@@ -264,12 +264,22 @@
    ======================================================================== */
 
 /* --- Prose typography --- */
-[data-theme="dark"] .prose h2 { border-bottom-color: #374151; }
+[data-theme="dark"] .prose { color: #d1d5db; }
+[data-theme="dark"] .prose h1 { color: #f9fafb; }
+[data-theme="dark"] .prose h2 { color: #f9fafb; border-bottom-color: #374151; }
+[data-theme="dark"] .prose h3 { color: #f9fafb; }
+[data-theme="dark"] .prose h4,
+[data-theme="dark"] .prose h5,
+[data-theme="dark"] .prose h6 { color: #f3f4f6; }
 [data-theme="dark"] .prose a { color: #60a5fa; }
 [data-theme="dark"] .prose a:hover { color: #93c5fd; }
-[data-theme="dark"] .prose :not(pre) > code { background-color: #1f2937; color: #f9fafb; }
+[data-theme="dark"] .prose pre { background-color: #0d1117; }
+[data-theme="dark"] .prose pre.chroma { background-color: #0d1117; }
+[data-theme="dark"] .prose pre.mermaid { background-color: transparent; }
+[data-theme="dark"] .prose code { background-color: #1f2937; color: #f9fafb; }
+[data-theme="dark"] .prose pre code { background-color: transparent; color: inherit; }
 [data-theme="dark"] .prose blockquote { border-left-color: #374151; color: #9ca3af; }
-[data-theme="dark"] .prose th { background-color: #1f2937; }
+[data-theme="dark"] .prose th { background-color: #1f2937; color: #f9fafb; }
 [data-theme="dark"] .prose th,
 [data-theme="dark"] .prose td { border-color: #374151; }
 [data-theme="dark"] .prose del { color: #9ca3af; }
