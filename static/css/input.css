@@ -398,6 +398,16 @@
   overflow: auto;
 }
 
+/* --- Root element background in dark mode ---
+   #scalar-api-reference itself sits outside the .dark-mode subtree, so
+   --scalar-background-1 variables don't reach it. Set explicitly to match
+   the card wrapper (dark:bg-gray-900 = #111827) and Scalar's own primary
+   dark surface. This must be a standalone block so Tailwind v3 does not
+   merge it with the unguarded #scalar-api-reference blocks above. */
+[data-theme="dark"] #scalar-api-reference {
+  background-color: #111827; /* gray-900 */
+}
+
 /* --- Scalar color palette (dark mode overrides for Omnidex) --- */
 /* Use html[data-theme="dark"] (element + attr) to prevent Tailwind v3 from
    collapsing these into the unguarded #scalar-api-reference blocks above. */
