@@ -972,7 +972,7 @@ const openapiDocContentBody = `
                 View source
             </a>
         </div>
-        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 scalar-card">
             <div id="scalar-api-reference"></div>
             <script type="application/json" id="openapi-spec">{{safeJS .HTML}}</script>
             <script>
@@ -1004,7 +1004,80 @@ const openapiDocContentBody = `
                         hideClientButton: true,
                         hideTestRequestButton: true,
                         telemetry: false,
-                        showDeveloperTools: 'never'
+                        showDeveloperTools: 'never',
+                        customCss: [
+                            /* ---- Light mode ---- */
+                            '.light-mode {',
+                            '  --scalar-color-1: #111827;',
+                            '  --scalar-color-2: rgba(55, 65, 81, 0.9);',
+                            '  --scalar-color-3: rgba(107, 114, 128, 0.8);',
+                            '  --scalar-color-accent: #2563eb;',
+                            '  --scalar-background-1: #ffffff;',
+                            '  --scalar-background-2: #f9fafb;',
+                            '  --scalar-background-3: #f3f4f6;',
+                            '  --scalar-background-accent: rgba(37, 99, 235, 0.06);',
+                            '  --scalar-border-color: #e5e7eb;',
+                            '  --scalar-button-1: #2563eb;',
+                            '  --scalar-button-1-hover: #1d4ed8;',
+                            '  --scalar-button-1-color: #ffffff;',
+                            '  --scalar-shadow-1: 0 1px 3px 0 rgba(0,0,0,0.06);',
+                            '  --scalar-shadow-2: 0 1px 3px 0 rgba(0,0,0,0.06), 0 0 0 1px #e5e7eb;',
+                            '}',
+                            '.light-mode .sidebar {',
+                            '  --scalar-sidebar-background-1: #ffffff;',
+                            '  --scalar-sidebar-border-color: #e5e7eb;',
+                            '  --scalar-sidebar-color-1: #111827;',
+                            '  --scalar-sidebar-color-2: #374151;',
+                            '  --scalar-sidebar-color-active: #2563eb;',
+                            '  --scalar-sidebar-item-hover-background: #f3f4f6;',
+                            '  --scalar-sidebar-item-hover-color: #111827;',
+                            '  --scalar-sidebar-item-active-background: #eff6ff;',
+                            '  --scalar-sidebar-search-background: #f9fafb;',
+                            '  --scalar-sidebar-search-border-color: #d1d5db;',
+                            '  --scalar-sidebar-search-color: #6b7280;',
+                            '}',
+                            /* ---- Dark mode ---- */
+                            '.dark-mode {',
+                            '  --scalar-color-1: #f9fafb;',
+                            '  --scalar-color-2: rgba(209, 213, 219, 0.9);',
+                            '  --scalar-color-3: rgba(156, 163, 175, 0.8);',
+                            '  --scalar-color-accent: #60a5fa;',
+                            '  --scalar-background-1: #1f2937;',
+                            '  --scalar-background-2: #111827;',
+                            '  --scalar-background-3: #374151;',
+                            '  --scalar-background-accent: rgba(96, 165, 250, 0.08);',
+                            '  --scalar-border-color: #374151;',
+                            '  --scalar-button-1: #60a5fa;',
+                            '  --scalar-button-1-hover: #93c5fd;',
+                            '  --scalar-button-1-color: #030712;',
+                            '  --scalar-shadow-1: 0 1px 3px 0 rgba(0,0,0,0.3);',
+                            '  --scalar-shadow-2: 0 1px 3px 0 rgba(0,0,0,0.3), 0 0 0 1px #374151;',
+                            '}',
+                            '.dark-mode .sidebar {',
+                            '  --scalar-sidebar-background-1: #1f2937;',
+                            '  --scalar-sidebar-border-color: #374151;',
+                            '  --scalar-sidebar-color-1: #f9fafb;',
+                            '  --scalar-sidebar-color-2: #d1d5db;',
+                            '  --scalar-sidebar-color-active: #60a5fa;',
+                            '  --scalar-sidebar-item-hover-background: #111827;',
+                            '  --scalar-sidebar-item-hover-color: #f9fafb;',
+                            '  --scalar-sidebar-item-active-background: #1e3a5f;',
+                            '  --scalar-sidebar-search-background: #111827;',
+                            '  --scalar-sidebar-search-border-color: #374151;',
+                            '  --scalar-sidebar-search-color: #9ca3af;',
+                            '}',
+                            /* ---- Shared typography & layout ---- */
+                            '#scalar-api-reference {',
+                            '  --scalar-font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;',
+                            '  --scalar-font-code: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;',
+                            '  --scalar-radius: 0.375rem;',
+                            '  --scalar-radius-lg: 0.5rem;',
+                            '  --scalar-radius-xl: 0.75rem;',
+                            '  --scalar-border-width: 1px;',
+                            '  max-width: 100%;',
+                            '  overflow: auto;',
+                            '}'
+                        ].join('\n')
                     });
                 }
 
