@@ -149,14 +149,15 @@ const layoutHeader = `<!DOCTYPE html>
             };
         }
 
-        if (typeof mermaid !== 'undefined') {
-            var _mermaidDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        function initMermaid(isDark) {
+            if (typeof mermaid === 'undefined') return;
             mermaid.initialize({
                 startOnLoad: false,
                 theme: 'base',
-                themeVariables: getMermaidThemeVars(_mermaidDark)
+                themeVariables: getMermaidThemeVars(isDark)
             });
         }
+        initMermaid(document.documentElement.getAttribute('data-theme') === 'dark');
         function scrollToHash() {
             var hash = window.location.hash;
             if (hash && hash.charAt(0) === '#') {
@@ -663,11 +664,7 @@ const layoutHeader = `<!DOCTYPE html>
         window.addEventListener('omnidex:themechange', function(e) {
             if (typeof mermaid === 'undefined') return;
             var dark = e.detail && e.detail.theme === 'dark';
-            mermaid.initialize({
-                startOnLoad: false,
-                theme: 'base',
-                themeVariables: getMermaidThemeVars(dark)
-            });
+            initMermaid(dark);
             // Re-render all diagrams that have already been processed.
             var diagrams = document.querySelectorAll('.prose pre.mermaid svg');
             var pres = [];
