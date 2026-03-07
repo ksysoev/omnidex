@@ -634,11 +634,13 @@ const layoutHeader = `<!DOCTYPE html>
         function initThemeToggle() {
             var btn = document.getElementById('theme-toggle');
             if (!btn) return;
+            btn.setAttribute('aria-pressed', document.documentElement.getAttribute('data-theme') === 'dark' ? 'true' : 'false');
             btn.addEventListener('click', function() {
                 var html = document.documentElement;
                 var isDark = html.getAttribute('data-theme') === 'dark';
                 var next = isDark ? 'light' : 'dark';
                 html.setAttribute('data-theme', next);
+                btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
                 try {
                     localStorage.setItem('theme', next);
                 } catch (e) {
@@ -683,9 +685,11 @@ const layoutHeader = `<!DOCTYPE html>
                 }
             });
             if (pres.length > 0) {
-                mermaid.run({ nodes: pres })
-                    .then(initMermaidExpand)
-                    .catch(function(err) { console.error('Mermaid re-render failed:', err); initMermaidExpand(); });
+                requestAnimationFrame(function() {
+                    mermaid.run({ nodes: pres })
+                        .then(initMermaidExpand)
+                        .catch(function(err) { console.error('Mermaid re-render failed:', err); initMermaidExpand(); });
+                });
             }
         });
 
@@ -1020,16 +1024,15 @@ const openapiDocContentBody = `
                     });
                 }
 
-                var _initialDark = document.documentElement.getAttribute('data-theme') === 'dark';
                 if (typeof window.Scalar !== 'undefined' && typeof window.Scalar.createApiReference === 'function') {
-                    initScalar(_initialDark ? 'dark' : 'light');
+                    initScalar(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
                     return;
                 }
 
                 var existingScript = document.querySelector('script[data-scalar-api-reference]');
                 if (existingScript) {
                     if (existingScript.dataset.loaded === 'true') {
-                        initScalar(_initialDark ? 'dark' : 'light');
+                        initScalar(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
                     } else {
                         existingScript.addEventListener('load', function() {
                             var dark = document.documentElement.getAttribute('data-theme') === 'dark';
