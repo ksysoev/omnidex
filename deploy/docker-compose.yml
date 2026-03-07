@@ -31,7 +31,11 @@ services:
         parallelism: 1
         delay: 10s
         failure_action: rollback
-        order: start-first
+        # BoltDB (used by Bleve search index) requires an exclusive file lock.
+        # start-first would launch the new container while the old one still
+        # holds the lock, causing the new container to hang and fail its health
+        # check before rolling back. stop-first releases the lock first.
+        order: stop-first
       rollback_config:
         parallelism: 1
         delay: 5s
