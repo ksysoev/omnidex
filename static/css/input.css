@@ -340,5 +340,5 @@
 }
 
 [data-theme="dark"] .scalar-card {
-  background-color: #111827; /* gray-900 — matches --scalar-background-1 dark */
+  background-color: #1f2937; /* gray-800 — matches other dark cards and --scalar-background-1 */
 }

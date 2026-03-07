@@ -975,7 +975,7 @@ const openapiDocContentBody = `
                 View source
             </a>
         </div>
-        <div class="bg-white rounded-lg border border-gray-200 dark:border-gray-700 p-4 scalar-card">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 scalar-card">
             <div id="scalar-api-reference"></div>
             <script type="application/json" id="openapi-spec">{{safeJS .HTML}}</script>
             <script>
@@ -1045,8 +1045,8 @@ const openapiDocContentBody = `
                             '  --scalar-color-2: rgba(209, 213, 219, 0.9);',
                             '  --scalar-color-3: rgba(156, 163, 175, 0.8);',
                             '  --scalar-color-accent: #60a5fa;',
-                            '  --scalar-background-1: #111827;',
-                            '  --scalar-background-2: #1f2937;',
+                            '  --scalar-background-1: #1f2937;',
+                            '  --scalar-background-2: #111827;',
                             '  --scalar-background-3: #374151;',
                             '  --scalar-background-accent: rgba(96, 165, 250, 0.08);',
                             '  --scalar-border-color: #374151;',
@@ -1057,15 +1057,15 @@ const openapiDocContentBody = `
                             '  --scalar-shadow-2: 0 1px 3px 0 rgba(0,0,0,0.3), 0 0 0 1px #374151;',
                             '}',
                             '.dark-mode .sidebar {',
-                            '  --scalar-sidebar-background-1: #111827;',
+                            '  --scalar-sidebar-background-1: #1f2937;',
                             '  --scalar-sidebar-border-color: #374151;',
                             '  --scalar-sidebar-color-1: #f9fafb;',
                             '  --scalar-sidebar-color-2: #d1d5db;',
                             '  --scalar-sidebar-color-active: #60a5fa;',
-                            '  --scalar-sidebar-item-hover-background: #1f2937;',
+                            '  --scalar-sidebar-item-hover-background: #111827;',
                             '  --scalar-sidebar-item-hover-color: #f9fafb;',
                             '  --scalar-sidebar-item-active-background: #1e3a5f;',
-                            '  --scalar-sidebar-search-background: #1f2937;',
+                            '  --scalar-sidebar-search-background: #111827;',
                             '  --scalar-sidebar-search-border-color: #374151;',
                             '  --scalar-sidebar-search-color: #9ca3af;',
                             '}',
