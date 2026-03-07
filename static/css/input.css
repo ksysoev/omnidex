@@ -267,7 +267,7 @@
 [data-theme="dark"] .prose h2 { border-bottom-color: #374151; }
 [data-theme="dark"] .prose a { color: #60a5fa; }
 [data-theme="dark"] .prose a:hover { color: #93c5fd; }
-[data-theme="dark"] .prose code { background-color: #1f2937; color: #f9fafb; }
+[data-theme="dark"] .prose :not(pre) > code { background-color: #1f2937; color: #f9fafb; }
 [data-theme="dark"] .prose blockquote { border-left-color: #374151; color: #9ca3af; }
 [data-theme="dark"] .prose th { background-color: #1f2937; }
 [data-theme="dark"] .prose th,
