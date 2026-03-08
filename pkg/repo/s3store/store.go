@@ -57,10 +57,6 @@ const (
 	metaKeyContentType = "content-type"
 )
 
-// ErrNotFound is an alias for core.ErrNotFound kept for package-level convenience.
-// Prefer using core.ErrNotFound directly.
-var ErrNotFound = core.ErrNotFound
-
 // Config holds configuration for the S3-backed document store.
 // AWS credentials are not stored here; they are sourced via the standard
 // AWS credential chain (environment variables, ~/.aws/credentials, IAM role).
@@ -198,6 +194,24 @@ func repoMetaKey(repo string) string {
 	return repo + "/" + metaFileName
 }
 
+// parseUpdatedAt parses the updated-at metadata string. It accepts both
+// RFC3339Nano (current format) and RFC3339 (legacy format written before the
+// precision upgrade). When parsing fails or the value is absent, it falls back
+// to fallback (typically the S3 LastModified timestamp).
+func parseUpdatedAt(value string, fallback *time.Time) time.Time {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if t, err := time.Parse(layout, value); err == nil {
+			return t
+		}
+	}
+
+	if fallback != nil {
+		return *fallback
+	}
+
+	return time.Time{}
+}
+
 // isNotFound returns true when the AWS SDK error represents a missing object (404).
 func isNotFound(err error) bool {
 	var apiErr smithy.APIError
@@ -216,13 +230,17 @@ func isNotFound(err error) bool {
 // body; per-document metadata is stored as x-amz-meta-* object headers.
 // Repo-level metadata (meta.json) is updated after the document upload.
 func (s *Store) Save(ctx context.Context, doc core.Document) error { //nolint:gocritic // Document is passed by value for immutability
+	if err := validateRelPath(doc.Repo); err != nil {
+		return err
+	}
+
 	if err := validateRelPath(doc.Path); err != nil {
 		return err
 	}
 
 	metadata := map[string]string{
 		metaKeyTitle:       doc.Title,
-		metaKeyUpdatedAt:   doc.UpdatedAt.UTC().Format(time.RFC3339),
+		metaKeyUpdatedAt:   doc.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		metaKeyCommitSHA:   doc.CommitSHA,
 		metaKeyContentType: string(doc.ContentType),
 	}
@@ -248,6 +266,10 @@ func (s *Store) Save(ctx context.Context, doc core.Document) error { //nolint:go
 // The document content is read from the object body; metadata is read from
 // the x-amz-meta-* response headers.
 func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, error) {
+	if err := validateRelPath(repo); err != nil {
+		return core.Document{}, err
+	}
+
 	if err := validateRelPath(path); err != nil {
 		return core.Document{}, err
 	}
@@ -258,7 +280,7 @@ func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, erro
 	})
 	if err != nil {
 		if isNotFound(err) {
-			return core.Document{}, fmt.Errorf("%w: %s/%s", ErrNotFound, repo, path)
+			return core.Document{}, fmt.Errorf("%w: %s/%s", core.ErrNotFound, repo, path)
 		}
 
 		return core.Document{}, fmt.Errorf("failed to get document: %w", err)
@@ -273,10 +295,7 @@ func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, erro
 
 	meta := resp.Metadata
 
-	updatedAt, err := time.Parse(time.RFC3339, meta[metaKeyUpdatedAt])
-	if err != nil && resp.LastModified != nil {
-		updatedAt = *resp.LastModified
-	}
+	updatedAt := parseUpdatedAt(meta[metaKeyUpdatedAt], resp.LastModified)
 
 	ct := core.ContentType(meta[metaKeyContentType])
 	if ct == "" {
@@ -298,6 +317,10 @@ func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, erro
 // Delete removes a document from S3. Missing objects are silently ignored
 // (idempotent behaviour matching the local docstore).
 func (s *Store) Delete(ctx context.Context, repo, path string) error {
+	if err := validateRelPath(repo); err != nil {
+		return err
+	}
+
 	if err := validateRelPath(path); err != nil {
 		return err
 	}
@@ -355,10 +378,7 @@ func (s *Store) List(ctx context.Context, repo string) ([]core.DocumentMeta, err
 
 			meta := head.Metadata
 
-			updatedAt, err := time.Parse(time.RFC3339, meta[metaKeyUpdatedAt])
-			if err != nil && head.LastModified != nil {
-				updatedAt = *head.LastModified
-			}
+			updatedAt := parseUpdatedAt(meta[metaKeyUpdatedAt], head.LastModified)
 
 			ct := core.ContentType(meta[metaKeyContentType])
 			if ct == "" {
@@ -472,6 +492,10 @@ func (s *Store) ListRepos(ctx context.Context) ([]core.RepoInfo, error) {
 
 // SaveAsset writes a binary asset to S3.
 func (s *Store) SaveAsset(ctx context.Context, repo, path string, data []byte) error {
+	if err := validateRelPath(repo); err != nil {
+		return err
+	}
+
 	if err := validateRelPath(path); err != nil {
 		return err
 	}
@@ -490,6 +514,10 @@ func (s *Store) SaveAsset(ctx context.Context, repo, path string, data []byte) e
 
 // GetAsset retrieves a binary asset from S3 by its repository and path.
 func (s *Store) GetAsset(ctx context.Context, repo, path string) ([]byte, error) {
+	if err := validateRelPath(repo); err != nil {
+		return nil, err
+	}
+
 	if err := validateRelPath(path); err != nil {
 		return nil, err
 	}
@@ -500,7 +528,7 @@ func (s *Store) GetAsset(ctx context.Context, repo, path string) ([]byte, error)
 	})
 	if err != nil {
 		if isNotFound(err) {
-			return nil, fmt.Errorf("%w: asset %s/%s", ErrNotFound, repo, path)
+			return nil, fmt.Errorf("%w: asset %s/%s", core.ErrNotFound, repo, path)
 		}
 
 		return nil, fmt.Errorf("failed to get asset: %w", err)
@@ -518,6 +546,10 @@ func (s *Store) GetAsset(ctx context.Context, repo, path string) ([]byte, error)
 
 // DeleteAsset removes a binary asset from S3. Missing objects are silently ignored.
 func (s *Store) DeleteAsset(ctx context.Context, repo, path string) error {
+	if err := validateRelPath(repo); err != nil {
+		return err
+	}
+
 	if err := validateRelPath(path); err != nil {
 		return err
 	}
@@ -535,6 +567,10 @@ func (s *Store) DeleteAsset(ctx context.Context, repo, path string) error {
 
 // ListAssets returns all asset paths stored under the given repository prefix.
 func (s *Store) ListAssets(ctx context.Context, repo string) ([]string, error) {
+	if err := validateRelPath(repo); err != nil {
+		return nil, err
+	}
+
 	prefix := repo + "/" + assetsPrefix
 
 	var paths []string

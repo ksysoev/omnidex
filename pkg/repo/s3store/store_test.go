@@ -67,7 +67,7 @@ func TestStore_SaveAndGet(t *testing.T) {
 		Title:       "Getting Started",
 		Content:     "# Getting Started\n\nWelcome!",
 		CommitSHA:   "abc123",
-		UpdatedAt:   time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:   time.Now().UTC().Truncate(time.Nanosecond),
 		ContentType: core.ContentTypeMarkdown,
 	}
 
@@ -138,7 +138,7 @@ func TestStore_List(t *testing.T) {
 			Title:     "Getting Started",
 			Content:   "# Getting Started",
 			CommitSHA: "abc",
-			UpdatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Nanosecond),
 		},
 		{
 			ID:        "owner/repo/api/overview.md",
@@ -147,7 +147,7 @@ func TestStore_List(t *testing.T) {
 			Title:     "API Overview",
 			Content:   "# API Overview",
 			CommitSHA: "def",
-			UpdatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Nanosecond),
 		},
 	}
 
@@ -236,7 +236,7 @@ func TestStore_SaveOverwritesExisting(t *testing.T) {
 		Title:     "Original",
 		Content:   "# Original",
 		CommitSHA: "abc",
-		UpdatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Nanosecond),
 	}
 
 	require.NoError(t, store.Save(t.Context(), doc))
@@ -344,7 +344,7 @@ func TestStore_ContentTypeRoundTrip(t *testing.T) {
 		Title:       "API Spec",
 		Content:     "openapi: 3.0.0",
 		CommitSHA:   "abc",
-		UpdatedAt:   time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:   time.Now().UTC().Truncate(time.Nanosecond),
 		ContentType: core.ContentTypeOpenAPI,
 	}
 
@@ -366,7 +366,7 @@ func TestStore_GetDefaultsToMarkdownContentType(t *testing.T) {
 		Title:       "Doc",
 		Content:     "# Doc",
 		CommitSHA:   "abc",
-		UpdatedAt:   time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:   time.Now().UTC().Truncate(time.Nanosecond),
 		ContentType: "",
 	}
 
@@ -422,5 +422,56 @@ func TestStore_InvalidAssetPathRejectsTraversal(t *testing.T) {
 		_, err = store.GetAsset(t.Context(), "owner/repo", p)
 		require.Error(t, err, "expected error for GetAsset path %q", p)
 		assert.True(t, errors.Is(err, core.ErrInvalidPath), "expected ErrInvalidPath for GetAsset path %q, got %v", p, err)
+	}
+}
+
+func TestStore_InvalidRepoRejectsTraversal(t *testing.T) {
+	store := newTestStore(t)
+
+	invalidRepos := []string{
+		"../other",
+		"",
+		"/absolute/repo",
+	}
+
+	for _, repo := range invalidRepos {
+		doc := core.Document{
+			Repo:    repo,
+			Path:    "readme.md",
+			Title:   "Bad",
+			Content: "bad",
+		}
+
+		err := store.Save(t.Context(), doc)
+		require.Error(t, err, "Save: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "Save: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		_, err = store.Get(t.Context(), repo, "readme.md")
+		require.Error(t, err, "Get: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "Get: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		err = store.Delete(t.Context(), repo, "readme.md")
+		require.Error(t, err, "Delete: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "Delete: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		_, err = store.List(t.Context(), repo)
+		require.Error(t, err, "List: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "List: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		err = store.SaveAsset(t.Context(), repo, "img.png", []byte("data"))
+		require.Error(t, err, "SaveAsset: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "SaveAsset: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		_, err = store.GetAsset(t.Context(), repo, "img.png")
+		require.Error(t, err, "GetAsset: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "GetAsset: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		err = store.DeleteAsset(t.Context(), repo, "img.png")
+		require.Error(t, err, "DeleteAsset: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "DeleteAsset: expected ErrInvalidPath for repo %q, got %v", repo, err)
+
+		_, err = store.ListAssets(t.Context(), repo)
+		require.Error(t, err, "ListAssets: expected error for repo %q", repo)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "ListAssets: expected ErrInvalidPath for repo %q, got %v", repo, err)
 	}
 }
