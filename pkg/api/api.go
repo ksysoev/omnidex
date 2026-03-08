@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -28,6 +29,7 @@ type API struct {
 
 // Config holds the configuration for the API server.
 type Config struct {
+	StaticFS         fs.FS    `mapstructure:"-"`
 	Listen           string   `mapstructure:"listen"`
 	APIKeys          []string `mapstructure:"api_keys"`
 	MaxIngestBodyMiB int64    `mapstructure:"max_ingest_body_mib"` // Maximum ingest request body in MiB (default 50).
@@ -77,11 +79,16 @@ func New(cfg Config, svc Service, views ViewRenderer) (*API, error) {
 // When the context is cancelled, in-flight requests are given a grace period to complete
 // before the server is forcefully closed.
 func (a *API) Run(ctx context.Context) error {
+	mux, err := a.newMux()
+	if err != nil {
+		return fmt.Errorf("failed to create mux: %w", err)
+	}
+
 	s := &http.Server{
 		Addr:              a.config.Listen,
 		ReadHeaderTimeout: defaultTimeout,
 		WriteTimeout:      defaultTimeout,
-		Handler:           a.newMux(),
+		Handler:           mux,
 	}
 
 	go func() {

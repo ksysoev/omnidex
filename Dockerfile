@@ -18,6 +18,9 @@ RUN go mod download
 
 COPY . .
 
+# Overwrite input.css with the compiled stylesheet so it gets embedded by //go:embed.
+COPY --from=css /app/style.css ./static/css/style.css
+
 RUN CGO_ENABLED=0 go build -o omnidex -ldflags "-X main.version=$VERSION -X main.name=omnidex" ./cmd/omnidex/main.go
 
 FROM alpine:3.21
@@ -29,8 +32,6 @@ RUN addgroup -S omnidex && adduser -S omnidex -G omnidex
 RUN mkdir -p /data/docs /data/search && chown -R omnidex:omnidex /data
 
 COPY --from=builder /app/omnidex /usr/local/bin/omnidex
-COPY --from=builder /app/static /static
-COPY --from=css /app/style.css /static/css/style.css
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 USER omnidex

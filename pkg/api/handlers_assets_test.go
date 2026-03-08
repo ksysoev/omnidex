@@ -23,7 +23,8 @@ func TestAssetPage_Success(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	imgData := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "images/arch.png").Return(imgData, nil)
@@ -49,7 +50,8 @@ func TestAssetPage_NotFound(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "missing.png").Return(nil, docstore.ErrNotFound)
 
@@ -71,7 +73,8 @@ func TestAssetPage_InternalError(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "broken.png").Return(nil, errors.New("disk failure"))
 
@@ -93,7 +96,8 @@ func TestAssetPage_SVGContentType(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	svgData := []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`)
 	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "diagram.svg").Return(svgData, nil)
@@ -117,7 +121,8 @@ func TestAssetPage_SecurityHeaders(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	imgData := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	svc.EXPECT().GetAsset(mock.Anything, "owner/repo", "images/arch.png").Return(imgData, nil)
@@ -142,7 +147,8 @@ func TestAssetPage_InvalidPath(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	// The service returns ErrInvalidPath (e.g. the store's traversal check fired).
 	// The handler must respond with 400, not 500, and must not log a server error.
@@ -166,7 +172,8 @@ func TestAssetPage_ContentTypeDetectedFromData(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	// A .bin file has no MIME type registered for its extension, so the handler
 	// falls back to http.DetectContentType to sniff the data.
