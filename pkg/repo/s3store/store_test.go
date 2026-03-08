@@ -3,7 +3,6 @@ package s3store
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http/httptest"
@@ -1145,12 +1144,6 @@ func TestNew_WithEndpointAndPathStyle(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, store)
 }
-
-// ---------------------------------------------------------------------------
-// json import sentinel — ensures the json package stays used.
-// ---------------------------------------------------------------------------
-
-var _ = json.Marshal
 
 func TestStore_List_SkipsExactPrefixKey(t *testing.T) {
 	// Place an object whose key is exactly the docs/ prefix (i.e. relPath == "").
