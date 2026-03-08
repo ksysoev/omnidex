@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ksysoev/omnidex/pkg/api"
+	"github.com/ksysoev/omnidex/pkg/repo/s3store"
 	"github.com/spf13/viper"
 )
 
@@ -16,8 +17,11 @@ type appConfig struct {
 }
 
 // StorageConfig holds configuration for document storage.
+// Type selects the storage backend: "local" (default) or "s3".
 type StorageConfig struct {
-	Path string `mapstructure:"path"`
+	Path string         `mapstructure:"path"`
+	Type string         `mapstructure:"type"`
+	S3   s3store.Config `mapstructure:"s3"`
 }
 
 // SearchConfig holds configuration for the search engine.
