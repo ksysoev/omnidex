@@ -71,6 +71,39 @@ func TestRunCommand_InvalidStoragePath(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestRunCommand_UnknownStorageType(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "search.bleve")
+
+	t.Setenv("API_LISTEN", ":0")
+	t.Setenv("STORAGE_TYPE", "unknowntype")
+	t.Setenv("SEARCH_INDEX_PATH", indexPath)
+
+	err := RunCommand(t.Context(), &cmdFlags{LogLevel: "info"})
+	assert.ErrorContains(t, err, "unknown storage type")
+}
+
+func TestRunCommand_S3StorageType(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "search.bleve")
+
+	t.Setenv("API_LISTEN", ":0")
+	t.Setenv("STORAGE_TYPE", "s3")
+	t.Setenv("SEARCH_INDEX_PATH", indexPath)
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	// s3store.New succeeds (no network call at construction time); the server
+	// exits cleanly when the context is cancelled.
+	err := RunCommand(ctx, &cmdFlags{LogLevel: "info"})
+	assert.NoError(t, err)
+}
+
 // writeFile creates a regular file at the given path.
 func writeFile(path string) error {
 	f, err := os.Create(path)
