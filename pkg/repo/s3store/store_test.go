@@ -92,7 +92,7 @@ func TestStore_GetNotFound(t *testing.T) {
 
 	_, err := store.Get(t.Context(), "owner/repo", "nonexistent.md")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNotFound))
+	assert.True(t, errors.Is(err, core.ErrNotFound))
 }
 
 func TestStore_Delete(t *testing.T) {
@@ -116,7 +116,7 @@ func TestStore_Delete(t *testing.T) {
 
 	_, err = store.Get(t.Context(), "owner/repo", "to-delete.md")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNotFound))
+	assert.True(t, errors.Is(err, core.ErrNotFound))
 }
 
 func TestStore_DeleteNonexistent(t *testing.T) {
@@ -272,7 +272,7 @@ func TestStore_GetAssetNotFound(t *testing.T) {
 
 	_, err := store.GetAsset(t.Context(), "owner/repo", "nonexistent.png")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNotFound))
+	assert.True(t, errors.Is(err, core.ErrNotFound))
 }
 
 func TestStore_DeleteAsset(t *testing.T) {
@@ -288,7 +288,7 @@ func TestStore_DeleteAsset(t *testing.T) {
 
 	_, err = store.GetAsset(t.Context(), "owner/repo", "img.png")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNotFound))
+	assert.True(t, errors.Is(err, core.ErrNotFound))
 }
 
 func TestStore_DeleteAssetNonexistent(t *testing.T) {
@@ -375,4 +375,52 @@ func TestStore_GetDefaultsToMarkdownContentType(t *testing.T) {
 	got, err := store.Get(t.Context(), "owner/repo", "doc.md")
 	require.NoError(t, err)
 	assert.Equal(t, core.ContentTypeMarkdown, got.ContentType)
+}
+
+func TestStore_InvalidPathRejectsTraversal(t *testing.T) {
+	store := newTestStore(t)
+
+	traversalPaths := []string{
+		"../secret",
+		"../../etc/passwd",
+		"",
+		"/absolute/path",
+	}
+
+	for _, p := range traversalPaths {
+		doc := core.Document{
+			Repo:    "owner/repo",
+			Path:    p,
+			Title:   "Bad",
+			Content: "bad",
+		}
+
+		err := store.Save(t.Context(), doc)
+		require.Error(t, err, "expected error for path %q", p)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "expected ErrInvalidPath for path %q, got %v", p, err)
+
+		_, err = store.Get(t.Context(), "owner/repo", p)
+		require.Error(t, err, "expected error for Get path %q", p)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "expected ErrInvalidPath for Get path %q, got %v", p, err)
+	}
+}
+
+func TestStore_InvalidAssetPathRejectsTraversal(t *testing.T) {
+	store := newTestStore(t)
+
+	traversalPaths := []string{
+		"../secret.png",
+		"",
+		"/absolute.png",
+	}
+
+	for _, p := range traversalPaths {
+		err := store.SaveAsset(t.Context(), "owner/repo", p, []byte("data"))
+		require.Error(t, err, "expected error for asset path %q", p)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "expected ErrInvalidPath for asset path %q, got %v", p, err)
+
+		_, err = store.GetAsset(t.Context(), "owner/repo", p)
+		require.Error(t, err, "expected error for GetAsset path %q", p)
+		assert.True(t, errors.Is(err, core.ErrInvalidPath), "expected ErrInvalidPath for GetAsset path %q, got %v", p, err)
+	}
 }

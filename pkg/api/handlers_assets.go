@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/ksysoev/omnidex/pkg/repo/docstore"
+	"github.com/ksysoev/omnidex/pkg/core"
 )
 
 // assetPage handles GET /assets/{owner}/{repo}/{path...} - serves a binary asset.
@@ -25,12 +25,12 @@ func (a *API) assetPage(w http.ResponseWriter, r *http.Request) {
 
 	data, err := a.svc.GetAsset(r.Context(), fullRepo, path)
 	if err != nil {
-		if errors.Is(err, docstore.ErrNotFound) {
+		if errors.Is(err, core.ErrNotFound) {
 			http.NotFound(w, r)
 			return
 		}
 
-		if errors.Is(err, docstore.ErrInvalidPath) {
+		if errors.Is(err, core.ErrInvalidPath) {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}

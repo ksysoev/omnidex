@@ -4,7 +4,6 @@ package docstore
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,11 +21,13 @@ const (
 	assetsDir    = "assets"
 )
 
-// ErrNotFound is returned when a requested document or asset does not exist.
-var ErrNotFound = errors.New("not found")
+// ErrNotFound is an alias for core.ErrNotFound for backward compatibility.
+// Prefer using core.ErrNotFound directly.
+var ErrNotFound = core.ErrNotFound
 
-// ErrInvalidPath is returned when a document path attempts directory traversal.
-var ErrInvalidPath = errors.New("invalid path: directory traversal not allowed")
+// ErrInvalidPath is an alias for core.ErrInvalidPath for backward compatibility.
+// Prefer using core.ErrInvalidPath directly.
+var ErrInvalidPath = core.ErrInvalidPath
 
 // repoMeta holds metadata about an indexed repository.
 type repoMeta struct {

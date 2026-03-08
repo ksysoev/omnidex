@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	stdpath "path"
 	"sort"
 	"strings"
 	"time"
@@ -56,17 +57,18 @@ const (
 	metaKeyContentType = "content-type"
 )
 
-// ErrNotFound is returned when a requested document or asset does not exist in S3.
-var ErrNotFound = errors.New("not found")
+// ErrNotFound is an alias for core.ErrNotFound kept for package-level convenience.
+// Prefer using core.ErrNotFound directly.
+var ErrNotFound = core.ErrNotFound
 
 // Config holds configuration for the S3-backed document store.
 // AWS credentials are not stored here; they are sourced via the standard
 // AWS credential chain (environment variables, ~/.aws/credentials, IAM role).
 type Config struct {
-	Endpoint       string // optional; for S3-compatible APIs such as MinIO
-	Bucket         string
-	Region         string
-	ForcePathStyle bool // enable for MinIO and other path-style APIs
+	Endpoint       string `mapstructure:"endpoint"` // optional; for S3-compatible APIs such as MinIO
+	Bucket         string `mapstructure:"bucket"`
+	Region         string `mapstructure:"region"`
+	ForcePathStyle bool   `mapstructure:"force_path_style"` // enable for MinIO and other path-style APIs
 }
 
 // s3Client defines the subset of the AWS S3 API used by Store.
@@ -155,6 +157,32 @@ func newWithStaticCreds(ctx context.Context, cfg Config, accessKey, secretKey st
 	return &Store{client: client, bucket: cfg.Bucket}, nil
 }
 
+// validateRelPath rejects relative paths that are empty, absolute, or that
+// escape the virtual prefix via directory traversal (e.g. "../docs/x").
+// This mirrors the validation performed by the local docstore backend so that
+// both backends present the same error semantics to callers.
+func validateRelPath(relPath string) error {
+	if relPath == "" {
+		return fmt.Errorf("%w: path must not be empty", core.ErrInvalidPath)
+	}
+
+	if stdpath.IsAbs(relPath) {
+		return fmt.Errorf("%w: path must not be absolute", core.ErrInvalidPath)
+	}
+
+	clean := stdpath.Clean(relPath)
+
+	if clean == "." || clean == ".." {
+		return fmt.Errorf("%w: path resolves to directory root", core.ErrInvalidPath)
+	}
+
+	if strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("%w: path attempts directory traversal", core.ErrInvalidPath)
+	}
+
+	return nil
+}
+
 // docKey returns the S3 object key for a document.
 func docKey(repo, path string) string {
 	return repo + "/" + docsPrefix + path
@@ -188,6 +216,10 @@ func isNotFound(err error) bool {
 // body; per-document metadata is stored as x-amz-meta-* object headers.
 // Repo-level metadata (meta.json) is updated after the document upload.
 func (s *Store) Save(ctx context.Context, doc core.Document) error { //nolint:gocritic // Document is passed by value for immutability
+	if err := validateRelPath(doc.Path); err != nil {
+		return err
+	}
+
 	metadata := map[string]string{
 		metaKeyTitle:       doc.Title,
 		metaKeyUpdatedAt:   doc.UpdatedAt.UTC().Format(time.RFC3339),
@@ -206,8 +238,7 @@ func (s *Store) Save(ctx context.Context, doc core.Document) error { //nolint:go
 	}
 
 	if err := s.updateRepoMeta(ctx, doc.Repo, doc.UpdatedAt); err != nil {
-		// Log but don't fail — the document itself is stored successfully.
-		slog.WarnContext(ctx, "s3store: failed to update repo metadata", "repo", doc.Repo, "err", err)
+		return fmt.Errorf("failed to update repo metadata: %w", err)
 	}
 
 	return nil
@@ -217,6 +248,10 @@ func (s *Store) Save(ctx context.Context, doc core.Document) error { //nolint:go
 // The document content is read from the object body; metadata is read from
 // the x-amz-meta-* response headers.
 func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, error) {
+	if err := validateRelPath(path); err != nil {
+		return core.Document{}, err
+	}
+
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(docKey(repo, path)),
@@ -238,7 +273,10 @@ func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, erro
 
 	meta := resp.Metadata
 
-	updatedAt, _ := time.Parse(time.RFC3339, meta[metaKeyUpdatedAt])
+	updatedAt, err := time.Parse(time.RFC3339, meta[metaKeyUpdatedAt])
+	if err != nil && resp.LastModified != nil {
+		updatedAt = *resp.LastModified
+	}
 
 	ct := core.ContentType(meta[metaKeyContentType])
 	if ct == "" {
@@ -260,6 +298,10 @@ func (s *Store) Get(ctx context.Context, repo, path string) (core.Document, erro
 // Delete removes a document from S3. Missing objects are silently ignored
 // (idempotent behaviour matching the local docstore).
 func (s *Store) Delete(ctx context.Context, repo, path string) error {
+	if err := validateRelPath(path); err != nil {
+		return err
+	}
+
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(docKey(repo, path)),
@@ -275,6 +317,10 @@ func (s *Store) Delete(ctx context.Context, repo, path string) error {
 // It uses ListObjectsV2 to enumerate the docs/ prefix then fetches metadata for
 // each object via HeadObject.
 func (s *Store) List(ctx context.Context, repo string) ([]core.DocumentMeta, error) {
+	if err := validateRelPath(repo); err != nil {
+		return nil, err
+	}
+
 	prefix := repo + "/" + docsPrefix
 
 	var docs []core.DocumentMeta
@@ -309,7 +355,10 @@ func (s *Store) List(ctx context.Context, repo string) ([]core.DocumentMeta, err
 
 			meta := head.Metadata
 
-			updatedAt, _ := time.Parse(time.RFC3339, meta[metaKeyUpdatedAt])
+			updatedAt, err := time.Parse(time.RFC3339, meta[metaKeyUpdatedAt])
+			if err != nil && head.LastModified != nil {
+				updatedAt = *head.LastModified
+			}
 
 			ct := core.ContentType(meta[metaKeyContentType])
 			if ct == "" {
@@ -339,57 +388,78 @@ func (s *Store) List(ctx context.Context, repo string) ([]core.DocumentMeta, err
 	return docs, nil
 }
 
-// ListRepos returns metadata for all repositories that have a meta.json object
-// in the bucket. It first lists all objects named meta.json (using a suffix
-// approach with delimiter-based pagination) then reads each one.
+// ListRepos returns metadata for all repositories discovered in the bucket.
+// It uses two-level delimiter-based listing (owner/ then owner/repo/) to avoid
+// scanning every object and scales proportionally to the number of repos rather
+// than the total number of objects in the bucket.
 func (s *Store) ListRepos(ctx context.Context) ([]core.RepoInfo, error) {
-	// List all objects that end in /meta.json by scanning without a prefix and
-	// filtering client-side. For large buckets this could be improved with a
-	// dedicated index object; for now scanning is acceptable.
 	var repos []core.RepoInfo
 
-	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
-		Bucket: aws.String(s.bucket),
+	// First level: enumerate {owner}/ common prefixes.
+	ownerPaginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket:    aws.String(s.bucket),
+		Delimiter: aws.String("/"),
 	})
 
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
+	for ownerPaginator.HasMorePages() {
+		ownerPage, err := ownerPaginator.NextPage(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list repos: %w", err)
+			return nil, fmt.Errorf("failed to list owners: %w", err)
 		}
 
-		for _, obj := range page.Contents {
-			key := aws.ToString(obj.Key)
-
-			// Only consider keys of the form {owner}/{repo}/meta.json.
-			if !strings.HasSuffix(key, "/"+metaFileName) {
+		for _, ownerPrefix := range ownerPage.CommonPrefixes {
+			owner := aws.ToString(ownerPrefix.Prefix) // e.g. "owner/"
+			if owner == "" {
 				continue
 			}
 
-			repoName := strings.TrimSuffix(key, "/"+metaFileName)
-
-			// Reject keys with too many or too few path segments.
-			// A valid repo key looks like "owner/repo" (exactly one slash).
-			if strings.Count(repoName, "/") != 1 {
-				continue
-			}
-
-			meta, err := s.readRepoMeta(ctx, repoName)
-			if err != nil {
-				slog.WarnContext(ctx, "s3store: failed to read repo meta; skipping", "repo", repoName, "err", err)
-				continue
-			}
-
-			docCount, err := s.countDocs(ctx, repoName)
-			if err != nil {
-				slog.WarnContext(ctx, "s3store: failed to count docs; using 0", "repo", repoName, "err", err)
-			}
-
-			repos = append(repos, core.RepoInfo{
-				Name:        meta.Name,
-				DocCount:    docCount,
-				LastUpdated: meta.LastUpdated,
+			// Second level: enumerate {owner}/{repo}/ common prefixes.
+			repoPaginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+				Bucket:    aws.String(s.bucket),
+				Prefix:    aws.String(owner),
+				Delimiter: aws.String("/"),
 			})
+
+			for repoPaginator.HasMorePages() {
+				repoPage, err := repoPaginator.NextPage(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("failed to list repos for owner %q: %w", owner, err)
+				}
+
+				for _, repoPrefix := range repoPage.CommonPrefixes {
+					prefix := aws.ToString(repoPrefix.Prefix) // e.g. "owner/repo/"
+					if prefix == "" {
+						continue
+					}
+
+					// Strip trailing slash to get "owner/repo".
+					repoName := strings.TrimSuffix(prefix, "/")
+
+					// Validate exactly one slash — guards against unexpected nesting.
+					if strings.Count(repoName, "/") != 1 {
+						continue
+					}
+
+					meta, err := s.readRepoMeta(ctx, repoName)
+					if err != nil {
+						slog.WarnContext(ctx, "s3store: failed to read repo meta; skipping", "repo", repoName, "err", err)
+						continue
+					}
+
+					docCount, err := s.countDocs(ctx, repoName)
+					if err != nil {
+						slog.WarnContext(ctx, "s3store: failed to count docs; using 0", "repo", repoName, "err", err)
+
+						docCount = 0
+					}
+
+					repos = append(repos, core.RepoInfo{
+						Name:        meta.Name,
+						DocCount:    docCount,
+						LastUpdated: meta.LastUpdated,
+					})
+				}
+			}
 		}
 	}
 
@@ -402,6 +472,10 @@ func (s *Store) ListRepos(ctx context.Context) ([]core.RepoInfo, error) {
 
 // SaveAsset writes a binary asset to S3.
 func (s *Store) SaveAsset(ctx context.Context, repo, path string, data []byte) error {
+	if err := validateRelPath(path); err != nil {
+		return err
+	}
+
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(assetKey(repo, path)),
@@ -416,6 +490,10 @@ func (s *Store) SaveAsset(ctx context.Context, repo, path string, data []byte) e
 
 // GetAsset retrieves a binary asset from S3 by its repository and path.
 func (s *Store) GetAsset(ctx context.Context, repo, path string) ([]byte, error) {
+	if err := validateRelPath(path); err != nil {
+		return nil, err
+	}
+
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(assetKey(repo, path)),
@@ -440,6 +518,10 @@ func (s *Store) GetAsset(ctx context.Context, repo, path string) ([]byte, error)
 
 // DeleteAsset removes a binary asset from S3. Missing objects are silently ignored.
 func (s *Store) DeleteAsset(ctx context.Context, repo, path string) error {
+	if err := validateRelPath(path); err != nil {
+		return err
+	}
+
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(assetKey(repo, path)),

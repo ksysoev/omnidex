@@ -51,26 +51,21 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 
 	switch cfg.Storage.Type {
 	case "s3":
-		s3Cfg := s3store.Config{
-			Bucket:         cfg.Storage.S3.Bucket,
-			Region:         cfg.Storage.S3.Region,
-			Endpoint:       cfg.Storage.S3.Endpoint,
-			ForcePathStyle: cfg.Storage.S3.ForcePathStyle,
-		}
-
-		s3Store, err := s3store.New(ctx, s3Cfg)
+		s3Store, err := s3store.New(ctx, cfg.Storage.S3)
 		if err != nil {
 			return fmt.Errorf("failed to create S3 document store: %w", err)
 		}
 
 		svc = core.New(s3Store, searchEngine, processors)
-	default: // "local" or unset
+	case "", "local":
 		localStore, err := docstore.New(cfg.Storage.Path)
 		if err != nil {
 			return fmt.Errorf("failed to create document store: %w", err)
 		}
 
 		svc = core.New(localStore, searchEngine, processors)
+	default:
+		return fmt.Errorf("unknown storage type %q: must be \"local\" or \"s3\"", cfg.Storage.Type)
 	}
 
 	// Initialize view renderer.
