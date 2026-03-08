@@ -33,7 +33,8 @@ func TestNewMux_RoutesRegistered(t *testing.T) {
 		config: Config{APIKeys: []string{"test-key"}},
 	}
 
-	mux := api.newMux()
+	mux, err := api.newMux()
+	assert.NoError(t, err)
 
 	tests := []struct {
 		name          string

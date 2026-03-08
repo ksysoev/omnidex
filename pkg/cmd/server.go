@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	omnidex "github.com/ksysoev/omnidex"
 	"github.com/ksysoev/omnidex/pkg/api"
 	"github.com/ksysoev/omnidex/pkg/core"
 	"github.com/ksysoev/omnidex/pkg/prov/markdown"
@@ -57,6 +58,8 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 	viewRenderer := views.New()
 
 	// Initialize and run API server.
+	cfg.API.StaticFS = omnidex.StaticFiles
+
 	apiSvc, err := api.New(cfg.API, svc, viewRenderer)
 	if err != nil {
 		return fmt.Errorf("failed to create API service: %w", err)
