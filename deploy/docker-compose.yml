@@ -41,7 +41,7 @@ services:
         delay: 5s
 
   mit-client:
-    image: "ghcr.io/ksysoev/make-it-public:latest"
+    image: "ghcr.io/ksysoev/make-it-public:v0.8.2"
     environment:
       - EXPOSE=omnidex:8080
       - TOKEN=${MIT_TOKEN}
