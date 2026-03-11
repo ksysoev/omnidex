@@ -76,7 +76,8 @@ jobs:
       environment_vars: |
         {
           "OMNIDEX_VERSION": "${{ needs.build-and-push.outputs.version }}",
-          "NETWORK_NAME": "omnidex-network"
+          "NETWORK_NAME": "omnidex-network",
+          "MIT_CLIENT_VERSION": "${{ vars.MIT_CLIENT_VERSION }}"
         }
     secrets:
       ssh_key: ${{ secrets.SSH_KEY }}
