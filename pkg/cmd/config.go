@@ -7,6 +7,7 @@ import (
 
 	"github.com/ksysoev/omnidex/pkg/api"
 	"github.com/ksysoev/omnidex/pkg/repo/s3store"
+	"github.com/ksysoev/omnidex/pkg/repo/search"
 	"github.com/spf13/viper"
 )
 
@@ -25,8 +26,11 @@ type StorageConfig struct {
 }
 
 // SearchConfig holds configuration for the search engine.
+// Type selects the search backend: "bleve" (default) or "elasticsearch".
 type SearchConfig struct {
-	IndexPath string `mapstructure:"index_path"`
+	IndexPath string                     `mapstructure:"index_path"`
+	Type      string                     `mapstructure:"type"`
+	Elastic   search.ElasticSearchConfig `mapstructure:"elasticsearch"`
 }
 
 // loadConfig loads the application configuration from the specified file path and environment variables.

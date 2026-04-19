@@ -27,13 +27,34 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Initialize search engine.
-	searchEngine, err := search.NewBleve(cfg.Search.IndexPath)
-	if err != nil {
-		return fmt.Errorf("failed to create search engine: %w", err)
+	// Initialize search engine based on configured backend.
+	var searchEng interface {
+		Index(ctx context.Context, doc core.Document, plainText string) error
+		Remove(ctx context.Context, docID string) error
+		Search(ctx context.Context, query string, opts core.SearchOpts) (*core.SearchResults, error)
+		ListByRepo(ctx context.Context, repo string) ([]string, error)
 	}
 
-	defer searchEngine.Close()
+	switch cfg.Search.Type {
+	case "elasticsearch":
+		searchEng, err = search.NewElastic(&cfg.Search.Elastic)
+		if err != nil {
+			return fmt.Errorf("failed to create elasticsearch engine: %w", err)
+		}
+	case "", "bleve":
+		bleveEng, bleveErr := search.NewBleve(cfg.Search.IndexPath)
+		if bleveErr != nil {
+			return fmt.Errorf("failed to create search engine: %w", bleveErr)
+		}
+
+		defer bleveEng.Close()
+
+		searchEng = bleveEng
+	default:
+		return fmt.Errorf("unknown search type %q: must be \"bleve\" or \"elasticsearch\"", cfg.Search.Type)
+	}
+
+	searchEngine := searchEng
 
 	// Initialize markdown renderer.
 	renderer := markdown.New()
