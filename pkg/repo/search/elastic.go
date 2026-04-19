@@ -298,6 +298,10 @@ func (e *ElasticEngine) ensureIndex() error {
 		return nil
 	}
 
+	if resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("unexpected status checking index existence: %s", resp.String())
+	}
+
 	mapping := map[string]any{
 		"mappings": map[string]any{
 			"properties": map[string]any{

@@ -300,7 +300,7 @@ func TestElasticEngine_Search_DefaultLimit(t *testing.T) {
 
 	for _, r := range reqs {
 		if r.Method == "POST" && r.Body != "" {
-			_ = json.Unmarshal([]byte(r.Body), &requestBody)
+			require.NoError(t, json.Unmarshal([]byte(r.Body), &requestBody))
 
 			break
 		}
