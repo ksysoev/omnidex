@@ -183,8 +183,10 @@
 .prose ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
 .prose li { margin-bottom: 0.25em; }
 .prose blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #6b7280; margin-bottom: 1em; }
-.prose table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
-.prose th, .prose td { border: 1px solid #e5e7eb; padding: 0.5em 0.75em; text-align: left; }
+.prose table { display: block; overflow-x: auto; width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 1em; }
+.prose th, .prose td { border: 1px solid #e5e7eb; border-bottom: none; border-right: none; padding: 0.5em 0.75em; text-align: left; }
+.prose tr > :last-child { border-right: 1px solid #e5e7eb; }
+.prose tr:last-child th, .prose tr:last-child td { border-bottom: 1px solid #e5e7eb; }
 .prose th { background-color: #f9fafb; font-weight: 600; }
 .prose del { text-decoration: line-through; color: #6b7280; }
 .prose img { max-width: 100%; border-radius: 0.5em; }
