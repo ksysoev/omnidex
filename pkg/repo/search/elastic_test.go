@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -91,7 +92,7 @@ func newTestElasticEngine(t *testing.T, handler *mockESHandler) (*ElasticEngine,
 
 	srv := httptest.NewServer(handler)
 
-	engine, err := NewElastic(&ElasticSearchConfig{
+	engine, err := NewElastic(context.Background(), &ElasticSearchConfig{
 		Addresses: []string{srv.URL},
 		Index:     "omnidex",
 	})
@@ -119,14 +120,14 @@ func TestNewElastic_DefaultIndex(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	engine, err := NewElastic(&ElasticSearchConfig{
+	engine, err := NewElastic(context.Background(), &ElasticSearchConfig{
 		Addresses: []string{srv.URL},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "omnidex", engine.index)
 }
 
-func TestNewElastic_CreatesIndex(t *testing.T) {
+func TestNewElastic_CreatesIndex(t *testing.T) { //nolint:dupl // Parallel to TestNewOpenSearch_CreatesIndex but tests a different type
 	handler := newMockESHandler()
 
 	// Override: index does NOT exist.
@@ -141,7 +142,7 @@ func TestNewElastic_CreatesIndex(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	engine, err := NewElastic(&ElasticSearchConfig{
+	engine, err := NewElastic(context.Background(), &ElasticSearchConfig{
 		Addresses: []string{srv.URL},
 		Index:     "omnidex",
 	})
@@ -417,25 +418,4 @@ func TestElasticEngine_BuildSearchQuery_QuotedPhrase(t *testing.T) {
 	boolQ, ok := q["bool"].(map[string]any)
 	require.True(t, ok)
 	assert.NotNil(t, boolQ["should"])
-}
-
-func TestNewElastic_OpenSearchHeaders(t *testing.T) {
-	handler := newMockESHandler()
-	handler.handlers["HEAD /omnidex"] = func(w http.ResponseWriter, r *http.Request) {
-		// Verify compatibility headers are sent.
-		ct := r.Header.Get("Content-Type")
-		assert.Contains(t, ct, "compatible-with=7")
-		w.WriteHeader(http.StatusOK)
-	}
-
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	engine, err := NewElastic(&ElasticSearchConfig{
-		Addresses:  []string{srv.URL},
-		Index:      "omnidex",
-		OpenSearch: true,
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, engine)
 }

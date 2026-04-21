@@ -14,26 +14,25 @@ import (
 	"github.com/ksysoev/omnidex/pkg/core"
 )
 
-// ElasticSearchConfig holds configuration for the Elasticsearch/OpenSearch backend.
+// ElasticSearchConfig holds configuration for the Elasticsearch backend.
 type ElasticSearchConfig struct {
-	Index      string   `mapstructure:"index"`
-	Username   string   `mapstructure:"username"`
-	Password   string   `mapstructure:"password"`
-	APIKey     string   `mapstructure:"api_key"`
-	CACert     string   `mapstructure:"ca_cert"`
-	Addresses  []string `mapstructure:"addresses"`
-	OpenSearch bool     `mapstructure:"opensearch"`
+	Index     string   `mapstructure:"index"`
+	Username  string   `mapstructure:"username"`
+	Password  string   `mapstructure:"password"`
+	APIKey    string   `mapstructure:"api_key"`
+	CACert    string   `mapstructure:"ca_cert"`
+	Addresses []string `mapstructure:"addresses"`
 }
 
-// ElasticEngine implements full-text search using Elasticsearch or OpenSearch.
+// ElasticEngine implements full-text search using Elasticsearch.
 type ElasticEngine struct {
 	client *elasticsearch.Client
 	index  string
 }
 
 // NewElastic creates a new Elasticsearch search engine.
-// It configures the client, verifies connectivity, and ensures the index exists with the correct mapping.
-func NewElastic(cfg *ElasticSearchConfig) (*ElasticEngine, error) {
+// It configures the client and ensures the index exists with the correct mapping.
+func NewElastic(ctx context.Context, cfg *ElasticSearchConfig) (*ElasticEngine, error) {
 	index := cfg.Index
 	if index == "" {
 		index = "omnidex"
@@ -58,14 +57,6 @@ func NewElastic(cfg *ElasticSearchConfig) (*ElasticEngine, error) {
 		esCfg.CACert = cert
 	}
 
-	if cfg.OpenSearch {
-		// Enable compatibility mode for OpenSearch.
-		esCfg.Header = http.Header{
-			"Content-Type": []string{"application/json; compatible-with=7"},
-			"Accept":       []string{"application/json; compatible-with=7"},
-		}
-	}
-
 	client, err := elasticsearch.NewClient(esCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create elasticsearch client: %w", err)
@@ -76,7 +67,7 @@ func NewElastic(cfg *ElasticSearchConfig) (*ElasticEngine, error) {
 		index:  index,
 	}
 
-	if err := engine.ensureIndex(); err != nil {
+	if err := engine.ensureIndex(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure elasticsearch index: %w", err)
 	}
 
@@ -276,18 +267,14 @@ func (e *ElasticEngine) ListByRepo(ctx context.Context, repo string) ([]string, 
 
 		lastHit := result.Hits.Hits[len(result.Hits.Hits)-1]
 		searchAfter = lastHit.Sort
-
-		if uint64(len(ids)) >= result.Hits.Total.Value {
-			break
-		}
 	}
 
 	return ids, nil
 }
 
 // ensureIndex creates the Elasticsearch index with the correct mappings if it does not already exist.
-func (e *ElasticEngine) ensureIndex() error {
-	resp, err := e.client.Indices.Exists([]string{e.index})
+func (e *ElasticEngine) ensureIndex(ctx context.Context) error {
+	resp, err := e.client.Indices.Exists([]string{e.index}, e.client.Indices.Exists.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to check index existence: %w", err)
 	}
@@ -333,6 +320,7 @@ func (e *ElasticEngine) ensureIndex() error {
 	createResp, err := e.client.Indices.Create(
 		e.index,
 		e.client.Indices.Create.WithBody(bytes.NewReader(data)),
+		e.client.Indices.Create.WithContext(ctx),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
@@ -349,53 +337,7 @@ func (e *ElasticEngine) ensureIndex() error {
 // buildSearchQuery constructs an Elasticsearch query DSL from user input.
 // It mirrors the hybrid query logic from BleveEngine.buildSearchQuery.
 func (e *ElasticEngine) buildSearchQuery(userQuery string) map[string]any {
-	terms := splitQueryTerms(userQuery)
-	if len(terms) == 0 {
-		return map[string]any{"match_none": map[string]any{}}
-	}
-
-	mustClauses := make([]map[string]any, 0, len(terms))
-	wordTermCount := 0
-
-	for _, term := range terms {
-		if term.phrase {
-			mustClauses = append(mustClauses, buildESPhraseQuery(term.text))
-		} else {
-			mustClauses = append(mustClauses, buildESTermQuery(term.text))
-			wordTermCount++
-		}
-	}
-
-	var perWordQuery map[string]any
-	if len(mustClauses) == 1 {
-		perWordQuery = mustClauses[0]
-	} else {
-		must := make([]any, len(mustClauses))
-		for i, c := range mustClauses {
-			must[i] = c
-		}
-
-		perWordQuery = map[string]any{
-			"bool": map[string]any{
-				"must": must,
-			},
-		}
-	}
-
-	// For multi-word unquoted queries, add a full-phrase fallback (same as Bleve logic).
-	if wordTermCount > 1 && wordTermCount == len(terms) {
-		return map[string]any{
-			"bool": map[string]any{
-				"should": []any{
-					perWordQuery,
-					buildESFullPhraseQuery(userQuery),
-				},
-				"minimum_should_match": 1,
-			},
-		}
-	}
-
-	return perWordQuery
+	return buildQueryDSL(userQuery)
 }
 
 // buildESTermQuery creates an ES query for a single non-phrase term with match, prefix, and fuzzy variants.
@@ -497,6 +439,58 @@ func buildESFullPhraseQuery(phrase string) map[string]any {
 			"minimum_should_match": 1,
 		},
 	}
+}
+
+// buildQueryDSL constructs a query DSL map from user input.
+// It is shared between ElasticEngine and OpenSearchEngine as both use compatible query DSL.
+func buildQueryDSL(userQuery string) map[string]any {
+	terms := splitQueryTerms(userQuery)
+	if len(terms) == 0 {
+		return map[string]any{"match_none": map[string]any{}}
+	}
+
+	mustClauses := make([]map[string]any, 0, len(terms))
+	wordTermCount := 0
+
+	for _, term := range terms {
+		if term.phrase {
+			mustClauses = append(mustClauses, buildESPhraseQuery(term.text))
+		} else {
+			mustClauses = append(mustClauses, buildESTermQuery(term.text))
+			wordTermCount++
+		}
+	}
+
+	var perWordQuery map[string]any
+	if len(mustClauses) == 1 {
+		perWordQuery = mustClauses[0]
+	} else {
+		must := make([]any, len(mustClauses))
+		for i, c := range mustClauses {
+			must[i] = c
+		}
+
+		perWordQuery = map[string]any{
+			"bool": map[string]any{
+				"must": must,
+			},
+		}
+	}
+
+	// For multi-word unquoted queries, add a full-phrase fallback (mirrors Bleve logic).
+	if wordTermCount > 1 && wordTermCount == len(terms) {
+		return map[string]any{
+			"bool": map[string]any{
+				"should": []any{
+					perWordQuery,
+					buildESFullPhraseQuery(userQuery),
+				},
+				"minimum_should_match": 1,
+			},
+		}
+	}
+
+	return perWordQuery
 }
 
 // esSearchResponse represents the Elasticsearch search response structure.

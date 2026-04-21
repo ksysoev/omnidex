@@ -37,9 +37,14 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 
 	switch cfg.Search.Type {
 	case "elasticsearch":
-		searchEng, err = search.NewElastic(&cfg.Search.Elastic)
+		searchEng, err = search.NewElastic(ctx, &cfg.Search.Elastic)
 		if err != nil {
 			return fmt.Errorf("failed to create elasticsearch engine: %w", err)
+		}
+	case "opensearch":
+		searchEng, err = search.NewOpenSearch(ctx, &cfg.Search.OpenSearch)
+		if err != nil {
+			return fmt.Errorf("failed to create opensearch engine: %w", err)
 		}
 	case "", "bleve":
 		bleveEng, bleveErr := search.NewBleve(cfg.Search.IndexPath)
@@ -51,7 +56,7 @@ func RunCommand(ctx context.Context, flags *cmdFlags) error {
 
 		searchEng = bleveEng
 	default:
-		return fmt.Errorf("unknown search type %q: must be \"bleve\" or \"elasticsearch\"", cfg.Search.Type)
+		return fmt.Errorf("unknown search type %q: must be \"bleve\", \"elasticsearch\", or \"opensearch\"", cfg.Search.Type)
 	}
 
 	searchEngine := searchEng
