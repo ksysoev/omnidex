@@ -228,11 +228,14 @@ const (
 	dslMinimumShouldMatch = "minimum_should_match"
 	dslBoost              = "boost"
 	dslMultiMatch         = "multi_match"
+	dslType               = "type"
 
-	mappingTypeText    = "text"
-	mappingTypeKeyword = "keyword"
-	mappingAnalyzer    = "analyzer"
-	mappingTermVector  = "term_vector"
+	mappingTypeText            = "text"
+	mappingTypeKeyword         = "keyword"
+	mappingAnalyzer            = "analyzer"
+	mappingTermVector          = "term_vector"
+	mappingAnalyzerStandard    = "standard"
+	mappingTermVectorPositions = "with_positions_offsets"
 )
 
 // ListByRepo returns the IDs of all documents in the index that belong to the given repository.
@@ -317,20 +320,20 @@ func (e *ElasticEngine) ensureIndex(ctx context.Context) error {
 		"mappings": map[string]any{
 			"properties": map[string]any{
 				fieldTitle: map[string]any{
-					"type":            mappingTypeText,
-					mappingAnalyzer:   "standard",
-					mappingTermVector: "with_positions_offsets",
+					dslType:           mappingTypeText,
+					mappingAnalyzer:   mappingAnalyzerStandard,
+					mappingTermVector: mappingTermVectorPositions,
 				},
 				fieldContent: map[string]any{
-					"type":            mappingTypeText,
-					mappingAnalyzer:   "standard",
-					mappingTermVector: "with_positions_offsets",
+					dslType:           mappingTypeText,
+					mappingAnalyzer:   mappingAnalyzerStandard,
+					mappingTermVector: mappingTermVectorPositions,
 				},
 				fieldRepo: map[string]any{
-					"type": mappingTypeKeyword,
+					dslType: mappingTypeKeyword,
 				},
 				fieldPath: map[string]any{
-					"type": mappingTypeKeyword,
+					dslType: mappingTypeKeyword,
 				},
 			},
 		},
@@ -370,17 +373,17 @@ func buildESTermQuery(term string) map[string]any {
 		// Exact/analyzed match — highest priority.
 		map[string]any{
 			dslMultiMatch: map[string]any{
-				"query":  term,
-				"fields": []string{"title^6", "content^3"},
-				"type":   "best_fields",
+				dslQuery:  term,
+				dslFields: []string{"title^6", "content^3"},
+				dslType:   "best_fields",
 			},
 		},
 		// Prefix match — medium priority.
 		map[string]any{
 			dslMultiMatch: map[string]any{
-				"query":  term,
-				"fields": []string{"title^3", "content^1.5"},
-				"type":   "phrase_prefix",
+				dslQuery:  term,
+				dslFields: []string{"title^3", "content^1.5"},
+				dslType:   "phrase_prefix",
 			},
 		},
 	}
@@ -394,8 +397,8 @@ func buildESTermQuery(term string) map[string]any {
 
 		should = append(should, map[string]any{
 			dslMultiMatch: map[string]any{
-				"query":     term,
-				"fields":    []string{"title^1", "content^0.5"},
+				dslQuery:    term,
+				dslFields:   []string{"title^1", "content^0.5"},
 				"fuzziness": fuzziness,
 			},
 		})

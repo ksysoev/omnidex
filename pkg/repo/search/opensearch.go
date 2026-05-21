@@ -285,20 +285,20 @@ func (e *OpenSearchEngine) ensureIndex(ctx context.Context) error {
 		"mappings": map[string]any{
 			"properties": map[string]any{
 				fieldTitle: map[string]any{
-					"type":            mappingTypeText,
-					mappingAnalyzer:   "standard",
-					mappingTermVector: "with_positions_offsets",
+					dslType:           mappingTypeText,
+					mappingAnalyzer:   mappingAnalyzerStandard,
+					mappingTermVector: mappingTermVectorPositions,
 				},
 				fieldContent: map[string]any{
-					"type":            mappingTypeText,
-					mappingAnalyzer:   "standard",
-					mappingTermVector: "with_positions_offsets",
+					dslType:           mappingTypeText,
+					mappingAnalyzer:   mappingAnalyzerStandard,
+					mappingTermVector: mappingTermVectorPositions,
 				},
 				fieldRepo: map[string]any{
-					"type": mappingTypeKeyword,
+					dslType: mappingTypeKeyword,
 				},
 				fieldPath: map[string]any{
-					"type": mappingTypeKeyword,
+					dslType: mappingTypeKeyword,
 				},
 			},
 		},
