@@ -1,6 +1,6 @@
 module github.com/ksysoev/omnidex
 
-go 1.24.4
+go 1.26.3
 
 require (
 	github.com/alecthomas/chroma/v2 v2.23.1
