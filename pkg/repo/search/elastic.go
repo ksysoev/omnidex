@@ -35,7 +35,7 @@ type ElasticEngine struct {
 func NewElastic(ctx context.Context, cfg *ElasticSearchConfig) (*ElasticEngine, error) {
 	index := cfg.Index
 	if index == "" {
-		index = "omnidex"
+		index = defaultIndex
 	}
 
 	esCfg := elasticsearch.Config{
@@ -83,10 +83,10 @@ func readCACert(path string) ([]byte, error) {
 // Index adds or updates a document in the Elasticsearch index.
 func (e *ElasticEngine) Index(ctx context.Context, doc core.Document, plainText string) error { //nolint:gocritic // Document is passed by value for immutability
 	body := map[string]string{
-		"title":   doc.Title,
-		"content": plainText,
-		"repo":    doc.Repo,
-		"path":    doc.Path,
+		fieldTitle:   doc.Title,
+		fieldContent: plainText,
+		fieldRepo:    doc.Repo,
+		fieldPath:    doc.Path,
 	}
 
 	data, err := json.Marshal(body)
@@ -143,14 +143,14 @@ func (e *ElasticEngine) Search(ctx context.Context, query string, opts core.Sear
 	esQuery := e.buildSearchQuery(query)
 
 	body := map[string]any{
-		"query":   esQuery,
-		"size":    opts.Limit,
+		dslQuery:  esQuery,
+		dslSize:   opts.Limit,
 		"from":    opts.Offset,
-		"_source": []string{"repo", "path", "title"},
-		"highlight": map[string]any{
-			"fields": map[string]any{
-				"title":   map[string]any{"number_of_fragments": 3},
-				"content": map[string]any{"fragment_size": 200, "number_of_fragments": 3},
+		dslSource: []string{fieldRepo, fieldPath, fieldTitle},
+		dslHighlight: map[string]any{
+			dslFields: map[string]any{
+				fieldTitle:   map[string]any{dslNumberOfFragments: 3},
+				fieldContent: map[string]any{"fragment_size": 200, dslNumberOfFragments: 3},
 			},
 			"pre_tags":  []string{"<mark>"},
 			"post_tags": []string{"</mark>"},
@@ -195,8 +195,8 @@ func (e *ElasticEngine) Search(ctx context.Context, query string, opts core.Sear
 			Repo:             hit.Source.Repo,
 			Path:             hit.Source.Path,
 			Title:            hit.Source.Title,
-			TitleFragments:   hit.Highlight["title"],
-			ContentFragments: hit.Highlight["content"],
+			TitleFragments:   hit.Highlight[fieldTitle],
+			ContentFragments: hit.Highlight[fieldContent],
 		}
 		hits = append(hits, sr)
 	}
@@ -211,6 +211,30 @@ func (e *ElasticEngine) Search(ctx context.Context, query string, opts core.Sear
 // esListByRepoPageSize is the page size used when collecting all document IDs for a repository.
 const esListByRepoPageSize = 10000
 
+// defaultIndex is the default Elasticsearch/OpenSearch index name.
+const defaultIndex = "omnidex"
+
+// Query DSL field name constants shared by Elasticsearch and OpenSearch.
+const (
+	dslQuery              = "query"
+	dslSize               = "size"
+	dslSource             = "_source"
+	dslHighlight          = "highlight"
+	dslFields             = "fields"
+	dslNumberOfFragments  = "number_of_fragments"
+	dslSort               = "sort"
+	dslBool               = "bool"
+	dslShould             = "should"
+	dslMinimumShouldMatch = "minimum_should_match"
+	dslBoost              = "boost"
+	dslMultiMatch         = "multi_match"
+
+	mappingTypeText    = "text"
+	mappingTypeKeyword = "keyword"
+	mappingAnalyzer    = "analyzer"
+	mappingTermVector  = "term_vector"
+)
+
 // ListByRepo returns the IDs of all documents in the index that belong to the given repository.
 func (e *ElasticEngine) ListByRepo(ctx context.Context, repo string) ([]string, error) {
 	ids := make([]string, 0, esListByRepoPageSize)
@@ -219,14 +243,14 @@ func (e *ElasticEngine) ListByRepo(ctx context.Context, repo string) ([]string, 
 
 	for {
 		body := map[string]any{
-			"query": map[string]any{
+			dslQuery: map[string]any{
 				"term": map[string]any{
-					"repo": repo,
+					fieldRepo: repo,
 				},
 			},
-			"size":    esListByRepoPageSize,
-			"_source": false,
-			"sort":    []any{"_doc"},
+			dslSize:   esListByRepoPageSize,
+			dslSource: false,
+			dslSort:   []any{"_doc"},
 		}
 
 		if searchAfter != nil {
@@ -292,21 +316,21 @@ func (e *ElasticEngine) ensureIndex(ctx context.Context) error {
 	mapping := map[string]any{
 		"mappings": map[string]any{
 			"properties": map[string]any{
-				"title": map[string]any{
-					"type":        "text",
-					"analyzer":    "standard",
-					"term_vector": "with_positions_offsets",
+				fieldTitle: map[string]any{
+					"type":            mappingTypeText,
+					mappingAnalyzer:   "standard",
+					mappingTermVector: "with_positions_offsets",
 				},
-				"content": map[string]any{
-					"type":        "text",
-					"analyzer":    "standard",
-					"term_vector": "with_positions_offsets",
+				fieldContent: map[string]any{
+					"type":            mappingTypeText,
+					mappingAnalyzer:   "standard",
+					mappingTermVector: "with_positions_offsets",
 				},
-				"repo": map[string]any{
-					"type": "keyword",
+				fieldRepo: map[string]any{
+					"type": mappingTypeKeyword,
 				},
-				"path": map[string]any{
-					"type": "keyword",
+				fieldPath: map[string]any{
+					"type": mappingTypeKeyword,
 				},
 			},
 		},
@@ -345,7 +369,7 @@ func buildESTermQuery(term string) map[string]any {
 	should := []any{
 		// Exact/analyzed match — highest priority.
 		map[string]any{
-			"multi_match": map[string]any{
+			dslMultiMatch: map[string]any{
 				"query":  term,
 				"fields": []string{"title^6", "content^3"},
 				"type":   "best_fields",
@@ -353,7 +377,7 @@ func buildESTermQuery(term string) map[string]any {
 		},
 		// Prefix match — medium priority.
 		map[string]any{
-			"multi_match": map[string]any{
+			dslMultiMatch: map[string]any{
 				"query":  term,
 				"fields": []string{"title^3", "content^1.5"},
 				"type":   "phrase_prefix",
@@ -369,7 +393,7 @@ func buildESTermQuery(term string) map[string]any {
 		}
 
 		should = append(should, map[string]any{
-			"multi_match": map[string]any{
+			dslMultiMatch: map[string]any{
 				"query":     term,
 				"fields":    []string{"title^1", "content^0.5"},
 				"fuzziness": fuzziness,
@@ -378,9 +402,9 @@ func buildESTermQuery(term string) map[string]any {
 	}
 
 	return map[string]any{
-		"bool": map[string]any{
-			"should":               should,
-			"minimum_should_match": 1,
+		dslBool: map[string]any{
+			dslShould:             should,
+			dslMinimumShouldMatch: 1,
 		},
 	}
 }
@@ -388,26 +412,26 @@ func buildESTermQuery(term string) map[string]any {
 // buildESPhraseQuery creates an ES phrase query for quoted terms.
 func buildESPhraseQuery(phrase string) map[string]any {
 	return map[string]any{
-		"bool": map[string]any{
-			"should": []any{
+		dslBool: map[string]any{
+			dslShould: []any{
 				map[string]any{
 					"match_phrase": map[string]any{
-						"title": map[string]any{
-							"query": phrase,
-							"boost": 10.0,
+						fieldTitle: map[string]any{
+							dslQuery: phrase,
+							dslBoost: 10.0,
 						},
 					},
 				},
 				map[string]any{
 					"match_phrase": map[string]any{
-						"content": map[string]any{
-							"query": phrase,
-							"boost": 5.0,
+						fieldContent: map[string]any{
+							dslQuery: phrase,
+							dslBoost: 5.0,
 						},
 					},
 				},
 			},
-			"minimum_should_match": 1,
+			dslMinimumShouldMatch: 1,
 		},
 	}
 }
@@ -415,28 +439,28 @@ func buildESPhraseQuery(phrase string) map[string]any {
 // buildESFullPhraseQuery creates a multi_match AND query for stopword-tolerant full-phrase matching.
 func buildESFullPhraseQuery(phrase string) map[string]any {
 	return map[string]any{
-		"bool": map[string]any{
-			"should": []any{
+		dslBool: map[string]any{
+			dslShould: []any{
 				map[string]any{
 					"match": map[string]any{
-						"title": map[string]any{
-							"query":    phrase,
+						fieldTitle: map[string]any{
+							dslQuery:   phrase,
 							"operator": "and",
-							"boost":    8.0,
+							dslBoost:   8.0,
 						},
 					},
 				},
 				map[string]any{
 					"match": map[string]any{
-						"content": map[string]any{
-							"query":    phrase,
+						fieldContent: map[string]any{
+							dslQuery:   phrase,
 							"operator": "and",
-							"boost":    4.0,
+							dslBoost:   4.0,
 						},
 					},
 				},
 			},
-			"minimum_should_match": 1,
+			dslMinimumShouldMatch: 1,
 		},
 	}
 }
@@ -471,7 +495,7 @@ func buildQueryDSL(userQuery string) map[string]any {
 		}
 
 		perWordQuery = map[string]any{
-			"bool": map[string]any{
+			dslBool: map[string]any{
 				"must": must,
 			},
 		}
@@ -480,12 +504,12 @@ func buildQueryDSL(userQuery string) map[string]any {
 	// For multi-word unquoted queries, add a full-phrase fallback (mirrors Bleve logic).
 	if wordTermCount > 1 && wordTermCount == len(terms) {
 		return map[string]any{
-			"bool": map[string]any{
-				"should": []any{
+			dslBool: map[string]any{
+				dslShould: []any{
 					perWordQuery,
 					buildESFullPhraseQuery(userQuery),
 				},
-				"minimum_should_match": 1,
+				dslMinimumShouldMatch: 1,
 			},
 		}
 	}
