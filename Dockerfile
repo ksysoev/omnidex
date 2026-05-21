@@ -7,7 +7,7 @@ COPY pkg/views/ ./pkg/views/
 
 RUN npm install tailwindcss@3 && npx tailwindcss -i input.css -o style.css --minify
 
-FROM golang:1.24.4-alpine AS builder
+FROM golang:1.26.3-alpine AS builder
 
 ARG VERSION=${VERSION}
 
