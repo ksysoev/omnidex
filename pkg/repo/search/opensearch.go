@@ -33,7 +33,7 @@ type OpenSearchEngine struct {
 func NewOpenSearch(ctx context.Context, cfg *OpenSearchConfig) (*OpenSearchEngine, error) {
 	index := cfg.Index
 	if index == "" {
-		index = "omnidex"
+		index = defaultIndex
 	}
 
 	osCfg := opensearchapi.Config{
@@ -78,10 +78,10 @@ func buildOSClientConfig(cfg *OpenSearchConfig) opensearch.Config {
 // Index adds or updates a document in the OpenSearch index.
 func (e *OpenSearchEngine) Index(ctx context.Context, doc core.Document, plainText string) error { //nolint:gocritic // Document is passed by value for immutability
 	body := map[string]string{
-		"title":   doc.Title,
-		"content": plainText,
-		"repo":    doc.Repo,
-		"path":    doc.Path,
+		fieldTitle:   doc.Title,
+		fieldContent: plainText,
+		fieldRepo:    doc.Repo,
+		fieldPath:    doc.Path,
 	}
 
 	data, err := json.Marshal(body)
@@ -135,14 +135,14 @@ func (e *OpenSearchEngine) Search(ctx context.Context, query string, opts core.S
 	esQuery := e.buildSearchQuery(query)
 
 	body := map[string]any{
-		"query":   esQuery,
-		"size":    opts.Limit,
+		dslQuery:  esQuery,
+		dslSize:   opts.Limit,
 		"from":    opts.Offset,
-		"_source": []string{"repo", "path", "title"},
-		"highlight": map[string]any{
-			"fields": map[string]any{
-				"title":   map[string]any{"number_of_fragments": 3},
-				"content": map[string]any{"fragment_size": 200, "number_of_fragments": 3},
+		dslSource: []string{fieldRepo, fieldPath, fieldTitle},
+		dslHighlight: map[string]any{
+			dslFields: map[string]any{
+				fieldTitle:   map[string]any{dslNumberOfFragments: 3},
+				fieldContent: map[string]any{"fragment_size": 200, dslNumberOfFragments: 3},
 			},
 			"pre_tags":  []string{"<mark>"},
 			"post_tags": []string{"</mark>"},
@@ -187,8 +187,8 @@ func (e *OpenSearchEngine) Search(ctx context.Context, query string, opts core.S
 			Repo:             src.Repo,
 			Path:             src.Path,
 			Title:            src.Title,
-			TitleFragments:   hit.Highlight["title"],
-			ContentFragments: hit.Highlight["content"],
+			TitleFragments:   hit.Highlight[fieldTitle],
+			ContentFragments: hit.Highlight[fieldContent],
 		}
 		hits = append(hits, sr)
 	}
@@ -213,14 +213,14 @@ func (e *OpenSearchEngine) ListByRepo(ctx context.Context, repo string) ([]strin
 
 	for {
 		body := map[string]any{
-			"query": map[string]any{
+			dslQuery: map[string]any{
 				"term": map[string]any{
-					"repo": repo,
+					fieldRepo: repo,
 				},
 			},
-			"size":    esListByRepoPageSize,
-			"_source": false,
-			"sort":    []any{"_doc"},
+			dslSize:   esListByRepoPageSize,
+			dslSource: false,
+			dslSort:   []any{"_doc"},
 		}
 
 		if searchAfter != nil {
@@ -284,21 +284,21 @@ func (e *OpenSearchEngine) ensureIndex(ctx context.Context) error {
 	mapping := map[string]any{
 		"mappings": map[string]any{
 			"properties": map[string]any{
-				"title": map[string]any{
-					"type":        "text",
-					"analyzer":    "standard",
-					"term_vector": "with_positions_offsets",
+				fieldTitle: map[string]any{
+					dslType:           mappingTypeText,
+					mappingAnalyzer:   mappingAnalyzerStandard,
+					mappingTermVector: mappingTermVectorPositions,
 				},
-				"content": map[string]any{
-					"type":        "text",
-					"analyzer":    "standard",
-					"term_vector": "with_positions_offsets",
+				fieldContent: map[string]any{
+					dslType:           mappingTypeText,
+					mappingAnalyzer:   mappingAnalyzerStandard,
+					mappingTermVector: mappingTermVectorPositions,
 				},
-				"repo": map[string]any{
-					"type": "keyword",
+				fieldRepo: map[string]any{
+					dslType: mappingTypeKeyword,
 				},
-				"path": map[string]any{
-					"type": "keyword",
+				fieldPath: map[string]any{
+					dslType: mappingTypeKeyword,
 				},
 			},
 		},

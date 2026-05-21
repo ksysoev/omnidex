@@ -29,6 +29,9 @@ import (
 
 const requestTimeout = 30 * time.Second
 
+// actionUpsert is the ingest action used to add or update documents and assets.
+const actionUpsert = "upsert"
+
 // Publisher handles publishing documentation to an Omnidex instance.
 type Publisher struct {
 	httpClient *http.Client
@@ -170,7 +173,7 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, assets 
 		documents = append(documents, core.IngestDocument{
 			Path:        p,
 			Content:     files[p],
-			Action:      "upsert",
+			Action:      actionUpsert,
 			ContentType: ct,
 		})
 	}
@@ -192,7 +195,7 @@ func BuildIngestRequest(repo, commitSHA string, files map[string]string, assets 
 			ingestAssets = append(ingestAssets, core.IngestAsset{
 				Path:    p,
 				Content: base64.StdEncoding.EncodeToString(assets[p]),
-				Action:  "upsert",
+				Action:  actionUpsert,
 			})
 		}
 	}

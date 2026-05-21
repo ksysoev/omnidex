@@ -77,7 +77,7 @@ func (e *BleveEngine) Search(_ context.Context, query string, opts core.SearchOp
 	q := buildSearchQuery(query)
 	req := bleve.NewSearchRequestOptions(q, opts.Limit, opts.Offset, false)
 	req.Highlight = bleve.NewHighlight()
-	req.Fields = []string{"repo", "path", "title"}
+	req.Fields = []string{fieldRepo, fieldPath, fieldTitle}
 
 	result, err := e.index.Search(req)
 	if err != nil {
@@ -95,15 +95,15 @@ func (e *BleveEngine) Search(_ context.Context, query string, opts core.SearchOp
 			ContentFragments: contentFrags,
 		}
 
-		if repo, ok := hit.Fields["repo"].(string); ok {
+		if repo, ok := hit.Fields[fieldRepo].(string); ok {
 			sr.Repo = repo
 		}
 
-		if path, ok := hit.Fields["path"].(string); ok {
+		if path, ok := hit.Fields[fieldPath].(string); ok {
 			sr.Path = path
 		}
 
-		if title, ok := hit.Fields["title"].(string); ok {
+		if title, ok := hit.Fields[fieldTitle].(string); ok {
 			sr.Title = title
 		}
 
@@ -145,7 +145,7 @@ const listByRepoPageSize = 10000
 // It paginates through results to ensure no documents are silently truncated.
 func (e *BleveEngine) ListByRepo(_ context.Context, repo string) ([]string, error) {
 	q := bleve.NewTermQuery(repo)
-	q.SetField("repo")
+	q.SetField(fieldRepo)
 
 	var (
 		from = 0
@@ -155,7 +155,7 @@ func (e *BleveEngine) ListByRepo(_ context.Context, repo string) ([]string, erro
 	for {
 		req := bleve.NewSearchRequestOptions(q, listByRepoPageSize, from, false)
 		req.Fields = []string{}
-		req.SortBy([]string{"_id"})
+		req.SortBy([]string{fieldID})
 
 		result, err := e.index.Search(req)
 		if err != nil {
@@ -187,6 +187,15 @@ const minFuzzyTermLength = 4
 
 // longTermThreshold is the term length at which fuzzy matching uses a higher edit distance.
 const longTermThreshold = 7
+
+// field name constants used for indexing and querying.
+const (
+	fieldTitle   = "title"
+	fieldContent = "content"
+	fieldRepo    = "repo"
+	fieldPath    = "path"
+	fieldID      = "_id"
+)
 
 // queryTerm represents a single parsed search term.
 type queryTerm struct {
@@ -317,12 +326,12 @@ func buildSearchQuery(userQuery string) bleveQuery.Query {
 // match, which correctly handles common English stopwords that the analyzer strips.
 func buildFullPhraseQueries(phrase string) bleveQuery.Query {
 	titleQ := bleve.NewMatchQuery(phrase)
-	titleQ.SetField("title")
+	titleQ.SetField(fieldTitle)
 	titleQ.SetBoost(8.0)
 	titleQ.SetOperator(bleveQuery.MatchQueryOperatorAnd)
 
 	contentQ := bleve.NewMatchQuery(phrase)
-	contentQ.SetField("content")
+	contentQ.SetField(fieldContent)
 	contentQ.SetBoost(4.0)
 	contentQ.SetOperator(bleveQuery.MatchQueryOperatorAnd)
 
@@ -332,11 +341,11 @@ func buildFullPhraseQueries(phrase string) bleveQuery.Query {
 // buildPhraseQueries creates a disjunction of MatchPhraseQuery for title and content fields.
 func buildPhraseQueries(phrase string) bleveQuery.Query {
 	titleQ := bleve.NewMatchPhraseQuery(phrase)
-	titleQ.SetField("title")
+	titleQ.SetField(fieldTitle)
 	titleQ.SetBoost(10.0)
 
 	contentQ := bleve.NewMatchPhraseQuery(phrase)
-	contentQ.SetField("content")
+	contentQ.SetField(fieldContent)
 	contentQ.SetBoost(5.0)
 
 	return bleve.NewDisjunctionQuery(titleQ, contentQ)
@@ -349,11 +358,11 @@ func buildTermQueries(term string) bleveQuery.Query {
 
 	// Exact/analyzed match -- highest priority.
 	titleMatch := bleve.NewMatchQuery(term)
-	titleMatch.SetField("title")
+	titleMatch.SetField(fieldTitle)
 	titleMatch.SetBoost(6.0)
 
 	contentMatch := bleve.NewMatchQuery(term)
-	contentMatch.SetField("content")
+	contentMatch.SetField(fieldContent)
 	contentMatch.SetBoost(3.0)
 
 	subQueries = append(subQueries, titleMatch, contentMatch)
@@ -362,11 +371,11 @@ func buildTermQueries(term string) bleveQuery.Query {
 	lowered := strings.ToLower(term)
 
 	titlePrefix := bleve.NewPrefixQuery(lowered)
-	titlePrefix.SetField("title")
+	titlePrefix.SetField(fieldTitle)
 	titlePrefix.SetBoost(3.0)
 
 	contentPrefix := bleve.NewPrefixQuery(lowered)
-	contentPrefix.SetField("content")
+	contentPrefix.SetField(fieldContent)
 	contentPrefix.SetBoost(1.5)
 
 	subQueries = append(subQueries, titlePrefix, contentPrefix)
@@ -379,12 +388,12 @@ func buildTermQueries(term string) bleveQuery.Query {
 		}
 
 		titleFuzzy := bleve.NewFuzzyQuery(lowered)
-		titleFuzzy.SetField("title")
+		titleFuzzy.SetField(fieldTitle)
 		titleFuzzy.SetFuzziness(fuzziness)
 		titleFuzzy.SetBoost(1.0)
 
 		contentFuzzy := bleve.NewFuzzyQuery(lowered)
-		contentFuzzy.SetField("content")
+		contentFuzzy.SetField(fieldContent)
 		contentFuzzy.SetFuzziness(fuzziness)
 		contentFuzzy.SetBoost(0.5)
 
@@ -404,10 +413,10 @@ func buildIndexMapping() mapping.IndexMapping {
 	keywordFieldMapping := bleve.NewKeywordFieldMapping()
 	keywordFieldMapping.Store = true
 
-	docMapping.AddFieldMappingsAt("title", textFieldMapping)
-	docMapping.AddFieldMappingsAt("content", textFieldMapping)
-	docMapping.AddFieldMappingsAt("repo", keywordFieldMapping)
-	docMapping.AddFieldMappingsAt("path", keywordFieldMapping)
+	docMapping.AddFieldMappingsAt(fieldTitle, textFieldMapping)
+	docMapping.AddFieldMappingsAt(fieldContent, textFieldMapping)
+	docMapping.AddFieldMappingsAt(fieldRepo, keywordFieldMapping)
+	docMapping.AddFieldMappingsAt(fieldPath, keywordFieldMapping)
 	docMapping.AddFieldMappingsAt("id", keywordFieldMapping)
 
 	indexMapping := bleve.NewIndexMapping()
@@ -420,7 +429,7 @@ func buildIndexMapping() mapping.IndexMapping {
 // Bleve keys fragments by field name ("title", "content"); all other fields fall into content.
 func extractFragments(fragments bleveSearch.FieldFragmentMap) (titleFrags, contentFrags []string) {
 	for field, frags := range fragments {
-		if field == "title" {
+		if field == fieldTitle {
 			titleFrags = append(titleFrags, frags...)
 		} else {
 			contentFrags = append(contentFrags, frags...)
