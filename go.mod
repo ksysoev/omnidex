@@ -11,7 +11,7 @@ require (
 	github.com/aws/smithy-go v1.25.1
 	github.com/blevesearch/bleve/v2 v2.6.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
-	github.com/elastic/go-elasticsearch/v8 v8.19.4
+	github.com/elastic/go-elasticsearch/v8 v8.19.6
 	github.com/getkin/kin-openapi v0.139.0
 	github.com/google/uuid v1.6.0
 	github.com/johannesboyne/gofakes3 v0.0.0-20260208201424-4c385a1f6a73
