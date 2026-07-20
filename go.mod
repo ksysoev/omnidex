@@ -14,7 +14,7 @@ require (
 	github.com/elastic/go-elasticsearch/v8 v8.19.6
 	github.com/getkin/kin-openapi v0.142.0
 	github.com/google/uuid v1.6.0
-	github.com/johannesboyne/gofakes3 v0.0.0-20260208201424-4c385a1f6a73
+	github.com/johannesboyne/gofakes3 v1.2.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/opensearch-project/opensearch-go/v4 v4.6.0
 	github.com/spf13/cobra v1.10.2
