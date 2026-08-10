@@ -12,7 +12,7 @@ require (
 	github.com/blevesearch/bleve/v2 v2.6.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.6
-	github.com/getkin/kin-openapi v0.145.0
+	github.com/getkin/kin-openapi v0.146.0
 	github.com/google/uuid v1.6.0
 	github.com/johannesboyne/gofakes3 v1.2.0
 	github.com/microcosm-cc/bluemonday v1.0.27
