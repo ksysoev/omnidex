@@ -16,7 +16,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/johannesboyne/gofakes3 v1.2.0
 	github.com/microcosm-cc/bluemonday v1.0.27
-	github.com/opensearch-project/opensearch-go/v4 v4.7.2
+	github.com/opensearch-project/opensearch-go/v4 v4.7.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
