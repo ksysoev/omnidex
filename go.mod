@@ -4,11 +4,11 @@ go 1.26.3
 
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/aws/aws-sdk-go-v2 v1.43.5
+	github.com/aws/aws-sdk-go-v2 v1.43.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.36
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.35
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.1
-	github.com/aws/smithy-go v1.27.7
+	github.com/aws/smithy-go v1.27.8
 	github.com/blevesearch/bleve/v2 v2.6.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.7
