@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
 	github.com/aws/smithy-go v1.28.5
 	github.com/blevesearch/bleve/v2 v2.6.1
-	github.com/bmatcuk/doublestar/v4 v4.10.2
+	github.com/bmatcuk/doublestar/v4 v4.10.3
 	github.com/elastic/go-elasticsearch/v8 v8.19.7
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/uuid v1.6.0
